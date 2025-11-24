@@ -38,6 +38,20 @@ input { margin: 6px 0; padding: 8px; width: 100%; box-sizing: border-box; border
 .small-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 13px }
 .small-btn.primary { background: #2563eb; color: white; border-color: #2563eb }
 
+/* Spinner simples usado para estado de loading em botões */
+.spinner {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	border: 2px solid rgba(255,255,255,0.3);
+	border-top-color: rgba(255,255,255,0.9);
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+	vertical-align: middle;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* Delivery card */
 .delivery-card { padding: 12px; border-radius: 10px; border: 1px solid #eef1f5; background: #fff; margin-bottom: 10px }
 
@@ -74,3 +88,18 @@ input { margin: 6px 0; padding: 8px; width: 100%; box-sizing: border-box; border
 	.app { flex-direction: column }
 	.sidebar { width: 100% }
 }
+
+/* Botão flutuante no mapa para centralizar/ajustar bounds */
+.map-center-btn {
+	position: absolute;
+	top: 12px;
+	right: 12px;
+	z-index: 9999;
+	background: rgba(255,255,255,0.95);
+	border: 1px solid #ddd;
+	padding: 8px 10px;
+	border-radius: 8px;
+	box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+	cursor: pointer;
+}
+.map-center-btn:hover{ background: #f8fafc }
