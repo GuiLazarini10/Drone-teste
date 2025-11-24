@@ -12,31 +12,29 @@ Resumo rápido
 - **ID automático para entregas e drones**: ambos gerados pelo backend se omitidos.
 - Interface melhorada com validação visual e campos readonly para coordenadas.
 
-Passos simples para rodar (Windows PowerShell)
+Passos simples para rodar (Windows PowerShell) em QUALQUER máquina
 
-1) Instalar dependências
-
+Clone o repositório:
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste\backend
-npm install
-
-Set-Location C:\Users\guila\Desktop\Drone-teste\frontend
-npm install
+git clone <URL-do-repo> Drone-teste
+cd Drone-teste
 ```
 
-2) Iniciar o backend
-
+1) Instalar dependências (método manual):
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste\backend
-node index.js
-# deve responder {"ok":true} em /health
+cd backend; npm install; cd ..\frontend; npm install; cd ..
 ```
 
-3) Iniciar o frontend
-
+2) Iniciar manualmente (em dois terminais):
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste\frontend
-npm run dev
+cd backend; node index.js   # porta 4000
+cd frontend; npm run dev    # porta 5173
+```
+
+OU usar script automático (instala se faltar e sobe ambos):
+```powershell
+./scripts/start-all.ps1 -Install   # primeira vez
+./scripts/start-all.ps1            # próximas vezes
 ```
 
 4) Usar a aplicação
@@ -81,11 +79,9 @@ O que foi adicionado automaticamente
 - `backend/db.example.json` — exemplo limpo do banco para você publicar em vez do `db.json` real.
 - `scripts/create-branch-and-push.ps1` — script PowerShell que cria um branch `prepare-for-github`, comita alterações e tenta dar push para o remote `origin`.
 
-Como usar o script (PowerShell):
-
+Como usar script de branch (PowerShell):
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste
-.\scripts\create-branch-and-push.ps1 -BranchName "prepare-for-github" -Remote "origin"
+./scripts/create-branch-and-push.ps1 -BranchName "prepare-for-github" -Remote "origin"
 ```
 
 Se não tiver um remote ainda, adicione antes com:
@@ -100,21 +96,17 @@ Demo projeto para gerenciar drones, entregas e voos (Node.js backend + React + V
 ## Como rodar (Windows PowerShell)
 
 1. Backend
-
 ```powershell
-cd 'C:\Users\guila\Desktop\Drone-teste\backend'
+cd backend
 npm install
 node index.js
-# O backend deve ficar disponível em http://127.0.0.1:4000
 ```
 
 2. Frontend
-
 ```powershell
-cd 'C:\Users\guila\Desktop\Drone-teste\frontend'
+cd frontend
 npm install
 npm run dev
-# O Vite normalmente expõe a UI em http://localhost:5173
 ```
 
 ## Testes e exemplos (PowerShell-safe)
@@ -184,7 +176,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:4000/drones/status'
 - Se o `git commit` falhar localmente por falta de configuração de usuário, configure:
 
 ```powershell
-cd 'C:\Users\guila\Desktop\Drone-teste'
+cd 'Drone-teste'
 git config user.name "GuiLazarini10"
 git config user.email "guilazarini10@gmail.com"
 ```
