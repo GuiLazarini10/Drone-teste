@@ -1,0 +1,27 @@
+# Node
+node_modules/
+npm-debug.log*
+package-lock.json
+yarn.lock
+
+# Env
+.env
+
+# Vite dev server
+dist/
+.vite/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Optional: keep db.json in repo for demo/sample data
+# backend/db.json

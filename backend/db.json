@@ -1,0 +1,29 @@
+{
+  "drones": [
+    {
+      "id": "drone-1",
+      "model": "DJI Mini",
+      "maxWeightKg": 2.0,
+      "maxRangeKm": 10,
+      "batteryPercent": 100
+    },
+    {
+      "id": "drone-2",
+      "model": "Parrot ANAFI",
+      "maxWeightKg": 1.5,
+      "maxRangeKm": 8,
+      "batteryPercent": 80
+    }
+  ],
+  "deliveries": [
+    {
+      "id": "del-1",
+      "weightKg": 1.0,
+      "pickup": { "lat": -23.55052, "lon": -46.633308 },
+      "dropoff": { "lat": -23.558, "lon": -46.625 },
+      "priority": "normal",
+      "status": "pending"
+    }
+  ],
+  "flights": []
+}

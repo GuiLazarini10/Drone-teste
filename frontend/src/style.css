@@ -1,0 +1,76 @@
+body { font-family: system-ui, Arial, sans-serif; padding: 20px; background: #f6f7fb; }
+button { cursor: pointer; }
+input { margin: 6px 0; padding: 8px; width: 100%; box-sizing: border-box; border: 1px solid #ddd; border-radius: 6px }
+
+/* Card layout */
+.card {
+	background: #ffffff;
+	border-radius: 12px;
+	padding: 16px;
+	box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+	margin-bottom: 20px;
+}
+
+/* Grid layout: left (forms) and right (lists) */
+.layout {
+	display: grid;
+	grid-template-columns: 360px 1fr;
+	gap: 24px;
+	align-items: start;
+}
+
+/* Drone card */
+.drone-card {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px;
+	border-radius: 10px;
+	border: 1px solid #eef1f5;
+	background: linear-gradient(180deg, #fff, #fbfdff);
+	margin-bottom: 10px;
+}
+.drone-meta { color: #666; font-size: 13px }
+.badge-green { color: white; background: #4caf50; padding: 4px 8px; border-radius: 6px; font-size: 12px }
+.badge-orange { color: white; background: #ff9800; padding: 4px 8px; border-radius: 6px; font-size: 12px }
+.badge-red { color: white; background: #f44336; padding: 4px 8px; border-radius: 6px; font-size: 12px }
+
+.small-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 13px }
+.small-btn.primary { background: #2563eb; color: white; border-color: #2563eb }
+
+/* Delivery card */
+.delivery-card { padding: 12px; border-radius: 10px; border: 1px solid #eef1f5; background: #fff; margin-bottom: 10px }
+
+/* Dashboard */
+.dashboard { display:flex; gap:12px; margin-bottom:20px }
+.metric { flex:1; padding:12px; border-radius:10px; background:#fff; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.04) }
+.metric .value { font-size:20px; font-weight:700 }
+.metric .label { color:#666; font-size:13px }
+
+/* Progress bar */
+.progress { height:10px; background:#eef2ff; border-radius:6px; overflow:hidden }
+.progress > i { display:block; height:100%; background:#6366f1 }
+
+@media (max-width: 880px) {
+	.layout { grid-template-columns: 1fr; }
+}
+
+/* Sidebar */
+.app { display:flex; gap:20px }
+.sidebar {
+	width:220px;
+	background: white;
+	border-radius: 12px;
+	padding: 12px;
+	box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+	height: fit-content;
+}
+.sidebar h3 { margin: 6px 0 12px 0 }
+.sidebar-item { padding: 10px 8px; border-radius: 8px; color:#0f172a; cursor:pointer; margin-bottom:6px }
+.sidebar-item:hover { background:#f1f5f9 }
+.sidebar-item.active { background:#eef2ff; color:#1e3a8a; font-weight:600; }
+
+@media (max-width: 880px) {
+	.app { flex-direction: column }
+	.sidebar { width: 100% }
+}
