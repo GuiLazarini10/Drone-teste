@@ -1,0 +1,176 @@
+{
+  "drones": [
+    {
+      "id": "Maverick",
+      "model": "Toyota",
+      "maxWeightKg": 10,
+      "maxRangeKm": 15,
+      "batteryPercent": 100
+    }
+  ],
+  "deliveries": [
+    {
+      "id": "ordem de serviço 1",
+      "weightKg": 2,
+      "pickup": {
+        "lat": 22,
+        "lon": 22
+      },
+      "dropoff": {
+        "lat": 22,
+        "lon": 22
+      },
+      "status": "cancelled",
+      "priority": "normal"
+    },
+    {
+      "id": "Ordem de serviço 1",
+      "weightKg": 11,
+      "pickup": {
+        "lat": 22,
+        "lon": 22
+      },
+      "dropoff": {
+        "lat": 22,
+        "lon": 22
+      },
+      "status": "cancelled",
+      "priority": "normal"
+    },
+    {
+      "id": "22",
+      "weightKg": 22,
+      "pickup": {
+        "lat": 222,
+        "lon": 22
+      },
+      "dropoff": {
+        "lat": 22,
+        "lon": 22
+      },
+      "status": "cancelled",
+      "priority": "normal"
+    }
+  ],
+  "flights": [],
+  "flightHistory": [
+    {
+      "id": "flight-1764002751293",
+      "deliveryId": "del-1",
+      "droneId": "123",
+      "distanceKm": 1.187,
+      "requiredBattery": 15,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T16:45:51.293Z",
+      "removedAt": "2025-11-24T17:24:58.879Z",
+      "removedReason": "drone-deleted:123",
+      "orderNumber": 2,
+      "displayId": "Ordem de serviço 2"
+    },
+    {
+      "id": "flight-1764000657271",
+      "deliveryId": "smoke-del-001",
+      "droneId": "drone-1",
+      "distanceKm": 1.187,
+      "requiredBattery": 15,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T16:10:57.271Z",
+      "removedAt": "2025-11-24T17:32:22.044Z",
+      "removedReason": "drone-deleted:drone-1",
+      "orderNumber": 3,
+      "displayId": "Ordem de serviço 3"
+    },
+    {
+      "id": "flight-1764006317470",
+      "deliveryId": "1",
+      "droneId": "drone-2",
+      "distanceKm": 0,
+      "requiredBattery": 0,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T17:45:17.470Z",
+      "removedAt": "2025-11-24T18:39:25.550Z",
+      "removedReason": "manual-delete:flight-1764006317470",
+      "orderNumber": 4,
+      "displayId": "Ordem de serviço 4"
+    },
+    {
+      "id": "flight-1764006274065",
+      "deliveryId": "del-1",
+      "droneId": "drone-2",
+      "distanceKm": 1.187,
+      "requiredBattery": 18,
+      "status": "in_progress",
+      "scheduledAt": "2025-11-24T17:22:00.000Z",
+      "removedAt": "2025-11-24T18:47:45.907Z",
+      "removedReason": "manual-delete:flight-1764006274065",
+      "orderNumber": 5,
+      "displayId": "Ordem de serviço 5"
+    },
+    {
+      "id": "flight-1764006276014",
+      "deliveryId": "smoke-del-001",
+      "droneId": "drone-2",
+      "distanceKm": 1.187,
+      "requiredBattery": 18,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T17:44:36.014Z",
+      "removedAt": "2025-11-24T18:47:47.627Z",
+      "removedReason": "manual-delete:flight-1764006276014",
+      "orderNumber": 6,
+      "displayId": "Ordem de serviço 6"
+    },
+    {
+      "id": "flight-1764010889062",
+      "deliveryId": "cancel-flow-del",
+      "droneId": "drone-2",
+      "distanceKm": 0.151,
+      "requiredBattery": 3,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T19:01:29.062Z",
+      "orderNumber": 7,
+      "displayId": "Ordem de serviço 7",
+      "removedAt": "2025-11-24T19:04:41.151Z",
+      "removedReason": "delivery-cancelled:cancel-flow-del"
+    },
+    {
+      "id": "flight-1764010142442",
+      "deliveryId": "del-1",
+      "droneId": "drone-2",
+      "distanceKm": 1.187,
+      "requiredBattery": 18,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T18:49:02.442Z",
+      "orderNumber": 1,
+      "displayId": "Ordem de serviço 1",
+      "removedAt": "2025-11-24T19:05:14.534Z",
+      "removedReason": "delivery-cancelled:del-1"
+    },
+    {
+      "id": "flight-1764011754104",
+      "deliveryId": "ordem de serviço 1",
+      "droneId": "flash",
+      "distanceKm": 0,
+      "requiredBattery": 0,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T19:15:54.104Z",
+      "orderNumber": 8,
+      "displayId": "Ordem de serviço 8",
+      "removedAt": "2025-11-24T19:17:44.000Z",
+      "removedReason": "drone-deleted:flash"
+    },
+    {
+      "id": "flight-1764011985635",
+      "deliveryId": "ordem de serviço 1",
+      "droneId": "Maverick",
+      "distanceKm": 0,
+      "requiredBattery": 0,
+      "status": "in_progress",
+      "scheduledAt": "2025-11-24T19:19:00.000Z",
+      "orderNumber": 9,
+      "displayId": "Ordem de serviço 9",
+      "removedAt": "2025-11-24T19:46:18.369Z",
+      "removedReason": "delivery-cancelled:ordem de serviço 1"
+    }
+  ],
+  "nextOrderNumber": 10
+}
