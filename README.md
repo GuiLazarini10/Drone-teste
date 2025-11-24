@@ -52,6 +52,6 @@ Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/flights' -ContentType
 
 ```powershell
 cd 'C:\Users\guila\Desktop\Drone-teste'
-git config user.name "Seu Nome"
-git config user.email "seu@email"
+git config user.name "GuiLazarini10"
+git config user.email "guilazarini10@gmail.com"
 ```
