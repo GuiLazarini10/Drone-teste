@@ -3,9 +3,9 @@
     {
       "id": "drone-1",
       "model": "DJI Mini",
-      "maxWeightKg": 2.0,
+      "maxWeightKg": 2,
       "maxRangeKm": 10,
-      "batteryPercent": 100
+      "batteryPercent": 85
     },
     {
       "id": "drone-2",
@@ -18,12 +18,42 @@
   "deliveries": [
     {
       "id": "del-1",
-      "weightKg": 1.0,
-      "pickup": { "lat": -23.55052, "lon": -46.633308 },
-      "dropoff": { "lat": -23.558, "lon": -46.625 },
+      "weightKg": 1,
+      "pickup": {
+        "lat": -23.55052,
+        "lon": -46.633308
+      },
+      "dropoff": {
+        "lat": -23.558,
+        "lon": -46.625
+      },
       "priority": "normal",
       "status": "pending"
+    },
+    {
+      "id": "smoke-del-001",
+      "weightKg": 1,
+      "pickup": {
+        "lat": -23.55052,
+        "lon": -46.633308
+      },
+      "dropoff": {
+        "lat": -23.558,
+        "lon": -46.625
+      },
+      "status": "in_transit",
+      "priority": "normal"
     }
   ],
-  "flights": []
+  "flights": [
+    {
+      "id": "flight-1764000657271",
+      "deliveryId": "smoke-del-001",
+      "droneId": "drone-1",
+      "distanceKm": 1.187,
+      "requiredBattery": 15,
+      "status": "scheduled",
+      "scheduledAt": "2025-11-24T16:10:57.271Z"
+    }
+  ]
 }
