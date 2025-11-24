@@ -5,6 +5,12 @@ Pequeno projeto de exemplo para gerenciar drones, entregas e voos.
 Resumo rápido
 - Backend: Node.js + Express (pasta `backend`, porta 4000).
 - Frontend: React + Vite (pasta `frontend`, porta 5173 por padrão).
+- Fila de entregas por prioridade (high/medium/normal/low) e ordem FIFO.
+- Simulação de estados do drone (`idle`, `loading`, `in_flight`) e avanço de voo.
+- Obstáculos de exclusão aérea (circulares) bloqueiam rotas.
+- **Geocodificação automática**: Digite apenas o endereço, o sistema busca as coordenadas automaticamente via Nominatim (OpenStreetMap).
+- **ID automático para entregas e drones**: ambos gerados pelo backend se omitidos.
+- Interface melhorada com validação visual e campos readonly para coordenadas.
 
 Passos simples para rodar (Windows PowerShell)
 
@@ -35,8 +41,15 @@ npm run dev
 
 4) Usar a aplicação
 - Abra a URL mostrada pelo Vite no navegador (algo como http://127.0.0.1:5173).
-- No formulário "Adicionar Entrega", escreva o endereço e clique em "Preencher coords".
-- O sistema mostra até 5 resultados; clique no resultado correto para preencher latitude e longitude.
+- **Nova UX melhorada**: No formulário "Adicionar Entrega" (sem campo de ID):
+  - Digite apenas o endereço de coleta (ex.: "Rua XV de Novembro, 500, Curitiba, PR")
+  - Clique em "Preencher coords" - o sistema busca automaticamente via Nominatim
+  - Escolha o resultado correto da lista
+  - Repita para o endereço de entrega
+  - As coordenadas aparecem automaticamente como readonly (fundo azul claro)
+  - O botão só fica ativo quando ambas as coordenadas estão preenchidas
+  - Após criar, um toast mostra o ID gerado automaticamente
+- Para testes avançados de despacho, você pode criar múltiplas entregas e chamar `POST /flights` sem `deliveryId` para seleção automática da próxima entrega viável.
 
 Problemas comuns
 - Se aparecer "Failed to fetch" ao clicar em "Preencher coords": verifique se o backend está rodando em `http://127.0.0.1:4000`.
@@ -112,11 +125,40 @@ npm run dev
 Invoke-RestMethod -Uri 'http://127.0.0.1:4000/health'
 ```
 
-- Criar entrega (exemplo):
+- Executar testes automatizados:
 
 ```powershell
-$body = @{ id = 'test-del'; weightKg = 1; pickup = @{ lat = -23.5; lon = -46.6 }; dropoff = @{ lat = -23.6; lon = -46.7 } } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/deliveries' -ContentType 'application/json' -Body $body
+cd C:\Users\guila\Documents\Drone-teste\backend
+npm test
+```
+
+- Limpar dados de teste do banco:
+
+```powershell
+cd C:\Users\guila\Documents\Drone-teste\backend
+npm run cleanup
+```
+
+### Criar entrega (exemplo - ID gerado automaticamente)
+
+```powershell
+$body = @{ weightKg = 1; pickup = @{ lat = -23.5; lon = -46.6 }; dropoff = @{ lat = -23.6; lon = -46.7 }; priority = 'high' } | ConvertTo-Json
+$resp = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/deliveries' -ContentType 'application/json' -Body $body
+"ID entrega gerado: $($resp.delivery.id)"
+### Criar drone (exemplo - ID gerado automaticamente)
+
+```powershell
+$drone = @{ model='Demo'; maxWeightKg=10; maxRangeKm=50; batteryPercent=100 } | ConvertTo-Json
+$respDrone = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/drones' -ContentType 'application/json' -Body $drone
+"ID drone gerado: $($respDrone.drone.id)"
+```
+
+# Criar obstáculo circular (ex.: raio 1km)
+$obs = @{ id = 'zona-1'; type='circle'; lat=-23.55; lon=-46.63; radiusKm=1 } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/obstacles' -ContentType 'application/json' -Body $obs
+
+# Listar obstáculos
+Invoke-RestMethod -Uri 'http://127.0.0.1:4000/obstacles'
 ```
 
 - Agendar voo (usar ConvertTo-Json ou arquivo para evitar problemas de escape no PowerShell):
@@ -124,6 +166,15 @@ Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/deliveries' -ContentT
 ```powershell
 $body = @{ deliveryId = 'test-del' } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/flights' -ContentType 'application/json' -Body $body
+
+# Agendar voo automático (sem deliveryId -> escolhe a melhor pendente)
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/flights' -ContentType 'application/json' -Body '{}'
+
+# Avançar estado do voo (scheduled -> in_progress -> completed)
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:4000/flights/$($resp.flight.id)/advance"
+
+# Status dos drones
+Invoke-RestMethod -Uri 'http://127.0.0.1:4000/drones/status'
 ```
 
 ## Observações

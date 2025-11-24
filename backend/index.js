@@ -35,11 +35,31 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 app.get('/drones', (req, res) => res.json(readDB().drones));
 app.post('/drones', (req, res) => {
   const db = readDB();
-  const d = req.body;
-  if (!d.id || !d.model) return res.status(400).json({ error: 'id and model required' });
-  db.drones.push({ ...d, batteryPercent: d.batteryPercent || 100 });
+  const d = req.body || {};
+  // Campos mínimos obrigatórios (model, maxWeightKg, maxRangeKm). batteryPercent opcional.
+  if (!d.model || typeof d.maxWeightKg === 'undefined' || typeof d.maxRangeKm === 'undefined') {
+    return res.status(400).json({ error: 'model, maxWeightKg, maxRangeKm required' });
+  }
+  let id = d.id;
+  if (id && db.drones.some(x => x.id === id)) {
+    return res.status(400).json({ error: 'Drone id already exists' });
+  }
+  if (!id) {
+    // gera até encontrar um id único
+    do {
+      id = 'drone-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+    } while (db.drones.some(x => x.id === id));
+  }
+  const newDrone = {
+    id,
+    model: d.model,
+    maxWeightKg: Number(d.maxWeightKg),
+    maxRangeKm: Number(d.maxRangeKm),
+    batteryPercent: typeof d.batteryPercent === 'number' ? d.batteryPercent : 100
+  };
+  db.drones.push(newDrone);
   writeDB(db);
-  res.status(201).json({ ok: true });
+  return res.status(201).json({ ok: true, drone: newDrone });
 });
 
 // Atualiza um drone: PUT /drones/:id
@@ -95,13 +115,107 @@ app.delete('/drones/:id', (req, res) => {
 });
 
 app.get('/deliveries', (req, res) => res.json(readDB().deliveries));
+// prioridades aceitas e seu peso de ordenação para fila
+const PRIORITY_ORDER = { low: 1, normal: 1, media: 2, medium: 2, alta: 3, high: 3 }; // aceita pt/en
+
+// ===================== Obstáculos =====================
+// Representação simples de obstáculos (zonas de exclusão aérea)
+// Tipos suportados:
+//  - circle: { id, type: 'circle', lat, lon, radiusKm }
+// Guardados em db.obstacles
+
+function lineIntersectsCircle(p1, p2, circle){
+  // Aproxima em km: convertemos pontos para vetores em um plano local.
+  // Estratégia: projetar lat/lon para coordenadas aproximadas x,y em km usando equiretangular.
+  const R = 6371;
+  const toXY = (pt) => {
+    const x = (pt.lon * Math.PI/180) * R * Math.cos((pt.lat*Math.PI/180));
+    const y = (pt.lat * Math.PI/180) * R;
+    return { x, y };
+  };
+  const A = toXY(p1); const B = toXY(p2); const C = toXY({lat: circle.lat, lon: circle.lon});
+  const ABx = B.x - A.x; const ABy = B.y - A.y; const ABlen2 = ABx*ABx + ABy*ABy;
+  if (ABlen2 === 0){
+    // segmento degenerado: usar distância ponto-ponto
+    const dx = A.x - C.x; const dy = A.y - C.y;
+    return Math.sqrt(dx*dx + dy*dy) <= circle.radiusKm;
+  }
+  // parâmetro t da projeção
+  let t = ((C.x - A.x)*ABx + (C.y - A.y)*ABy)/ABlen2;
+  t = Math.max(0, Math.min(1, t));
+  const Px = A.x + t*ABx; const Py = A.y + t*ABy;
+  const dx = Px - C.x; const dy = Py - C.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  return dist <= circle.radiusKm;
+}
+
+function routeBlockedByObstacles(pickup, dropoff, obstacles){
+  if (!Array.isArray(obstacles) || obstacles.length === 0) return false;
+  for (const o of obstacles){
+    if (o.type === 'circle' && typeof o.radiusKm === 'number'){
+      if (lineIntersectsCircle(pickup, dropoff, o)) return true;
+    }
+  }
+  return false;
+}
+
+// Endpoints de obstáculos
+app.get('/obstacles', (req,res) => {
+  const db = readDB();
+  return res.json(db.obstacles || []);
+});
+
+app.post('/obstacles', (req,res) => {
+  const db = readDB();
+  const body = req.body || {};
+  if (!body.id || !body.type) return res.status(400).json({ error: 'id and type required' });
+  if (body.type !== 'circle') return res.status(400).json({ error: 'only circle type supported for now' });
+  if (typeof body.lat !== 'number' || typeof body.lon !== 'number' || typeof body.radiusKm !== 'number'){
+    return res.status(400).json({ error: 'lat, lon, radiusKm (number) required' });
+  }
+  if (!db.obstacles) db.obstacles = [];
+  if (db.obstacles.find(o => o.id === body.id)) return res.status(400).json({ error: 'Obstacle id already exists' });
+  db.obstacles.push({ id: body.id, type: 'circle', lat: body.lat, lon: body.lon, radiusKm: body.radiusKm });
+  writeDB(db);
+  return res.status(201).json({ ok: true });
+});
+
+app.delete('/obstacles/:id', (req,res) => {
+  const db = readDB();
+  const id = req.params.id;
+  if (!db.obstacles) db.obstacles = [];
+  const idx = db.obstacles.findIndex(o => o.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Obstacle not found' });
+  const removed = db.obstacles.splice(idx,1)[0];
+  writeDB(db);
+  return res.json({ ok: true, removed });
+});
+
 app.post('/deliveries', (req, res) => {
   const db = readDB();
-  const d = req.body;
-  if (!d.id || !d.weightKg || !d.pickup || !d.dropoff) return res.status(400).json({ error: 'missing fields' });
-  db.deliveries.push({ ...d, status: 'pending', priority: d.priority || 'normal' });
+  const d = req.body || {};
+  // Campos obrigatórios exceto id (agora gerado automaticamente se não vier)
+  if (!d.weightKg || !d.pickup || !d.dropoff) return res.status(400).json({ error: 'missing fields (weightKg, pickup, dropoff)' });
+  if (typeof d.weightKg !== 'number' || d.weightKg <= 0) return res.status(400).json({ error: 'weightKg must be positive number' });
+
+  let id = d.id;
+  // Se id vier e já existir -> erro
+  if (id && db.deliveries.some(x => x.id === id)) {
+    return res.status(400).json({ error: 'Delivery id already exists' });
+  }
+  // Gerar id se não fornecido
+  if (!id) {
+    do {
+      id = 'entrega-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    } while (db.deliveries.some(x => x.id === id));
+  }
+
+  const pr = (d.priority || 'normal').toLowerCase();
+  const normalizedPriority = PRIORITY_ORDER[pr] ? pr : 'normal';
+  const newDelivery = { id, weightKg: d.weightKg, pickup: d.pickup, dropoff: d.dropoff, priority: normalizedPriority, status: 'pending', createdAt: new Date().toISOString() };
+  db.deliveries.push(newDelivery);
   writeDB(db);
-  res.status(201).json({ ok: true });
+  res.status(201).json({ ok: true, delivery: newDelivery });
 });
 
 // Atualizar uma entrega: PUT /deliveries/:id
@@ -247,13 +361,43 @@ function haversineKm(a, b) {
 
 // Agendar um voo: POST /flights { deliveryId }
 // Seleciona o melhor drone disponível que suporte peso/alcance/bateria e cria um registro de voo.
+// Função utilitária: retorna entregas pendentes ordenadas por prioridade (maior primeiro) e FIFO
+function getSortedPendingDeliveries(db){
+  const pending = db.deliveries.filter(d => d.status === 'pending');
+  return pending.sort((a,b) => {
+    const pa = PRIORITY_ORDER[a.priority] || 1;
+    const pb = PRIORITY_ORDER[b.priority] || 1;
+    if (pb !== pa) return pb - pa; // maior prioridade primeiro
+    // desempate por createdAt
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+}
+
+// Agendar um voo: POST /flights { deliveryId? }
+// Se deliveryId não for enviado, seleciona automaticamente a melhor entrega seguindo fila de prioridade.
 app.post('/flights', (req, res) => {
-  const { deliveryId } = req.body;
-  if (!deliveryId) return res.status(400).json({ error: 'deliveryId required' });
   const db = readDB();
-  const delivery = db.deliveries.find((d) => d.id === deliveryId);
-  if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
-  if (delivery.status !== 'pending') return res.status(400).json({ error: 'Delivery not pending' });
+  let { deliveryId } = req.body || {};
+
+  let delivery;
+  if (deliveryId){
+    delivery = db.deliveries.find(d => d.id === deliveryId);
+    if (!delivery) return res.status(404).json({ error: 'Delivery not found' });
+    if (delivery.status !== 'pending') return res.status(400).json({ error: 'Delivery not pending' });
+  } else {
+    const ordered = getSortedPendingDeliveries(db);
+    if (ordered.length === 0) return res.status(400).json({ error: 'No pending deliveries' });
+    // escolhe a primeira que tenha ao menos um drone viável
+    for (const d of ordered){
+      const testCandidates = db.drones.filter(dr => dr.maxWeightKg >= d.weightKg);
+      if (testCandidates.length === 0) continue;
+      const distanceKmTest = haversineKm(d.pickup, d.dropoff);
+      const feasibleTest = testCandidates.filter(dr => distanceKmTest <= dr.maxRangeKm);
+      if (feasibleTest.length === 0) continue;
+      delivery = d; break;
+    }
+    if (!delivery) return res.status(400).json({ error: 'No feasible delivery for any drone' });
+  }
 
   // candidatos que suportam o peso da entrega
   const candidates = db.drones.filter((dr) => dr.maxWeightKg >= delivery.weightKg);
@@ -261,11 +405,9 @@ app.post('/flights', (req, res) => {
 
   const distanceKm = haversineKm(delivery.pickup, delivery.dropoff);
 
-  // avalia viabilidade: dentro do alcance e com bateria suficiente
   const feasible = candidates
     .map((dr) => {
       const withinRange = distanceKm <= dr.maxRangeKm;
-  // estima bateria necessária como fração do alcance máximo, com margem de segurança de 20%
       const requiredBattery = Math.min(100, Math.ceil((distanceKm / dr.maxRangeKm) * 100 * 1.2));
       const hasBattery = dr.batteryPercent >= requiredBattery;
       return { dr, withinRange, requiredBattery, hasBattery };
@@ -276,9 +418,13 @@ app.post('/flights', (req, res) => {
     return res.status(400).json({ error: 'No feasible drone available (range/battery)' });
   }
 
-  // preferir drones que deixam maior carga remanescente após a missão
   feasible.sort((a, b) => (b.dr.batteryPercent - b.requiredBattery) - (a.dr.batteryPercent - a.requiredBattery));
   const chosen = feasible[0];
+
+  // Verifica bloqueio por obstáculos
+  if (routeBlockedByObstacles(delivery.pickup, delivery.dropoff, db.obstacles)){
+    return res.status(400).json({ error: 'Route blocked by obstacle' });
+  }
 
   const flight = {
     id: `flight-${Date.now()}`,
@@ -288,23 +434,63 @@ app.post('/flights', (req, res) => {
     requiredBattery: chosen.requiredBattery,
     status: 'scheduled',
     scheduledAt: new Date().toISOString(),
-    // assign sequential orderNumber and displayId
     orderNumber: (db.nextOrderNumber || 1),
     displayId: `Ordem de serviço ${db.nextOrderNumber || 1}`,
   };
 
-  // atualiza DB: reduz a bateria do drone, marca a entrega como 'in_transit' e adiciona o voo
   const droneIndex = db.drones.findIndex((d) => d.id === chosen.dr.id);
   db.drones[droneIndex].batteryPercent = Math.max(0, db.drones[droneIndex].batteryPercent - chosen.requiredBattery);
+  // estado e posição inicial do drone (simplificado: assume pickup como origem de voo)
+  db.drones[droneIndex].state = 'loading';
+  db.drones[droneIndex].currentLat = delivery.pickup.lat;
+  db.drones[droneIndex].currentLon = delivery.pickup.lon;
   const deliveryIndex = db.deliveries.findIndex((d) => d.id === delivery.id);
   db.deliveries[deliveryIndex].status = 'in_transit';
   db.flights.push(flight);
-  // increment nextOrderNumber for future flights
   if (typeof db.nextOrderNumber === 'undefined') db.nextOrderNumber = 1;
   db.nextOrderNumber = db.nextOrderNumber + 1;
   writeDB(db);
 
   return res.status(201).json({ ok: true, flight });
+});
+
+// Avançar estado de um voo (simulação simples): POST /flights/:id/advance
+// Transições:
+//  scheduled -> in_progress -> completed
+// Ajusta estado do drone e localização final.
+app.post('/flights/:id/advance', (req,res) => {
+  const db = readDB();
+  const id = req.params.id;
+  const idx = db.flights.findIndex(f => f.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'Flight not found' });
+  const flight = db.flights[idx];
+  const droneIdx = db.drones.findIndex(d => d.id === flight.droneId);
+  const deliveryIdx = db.deliveries.findIndex(d => d.id === flight.deliveryId);
+  if (droneIdx === -1 || deliveryIdx === -1) return res.status(500).json({ error: 'Related drone or delivery missing' });
+
+  if (flight.status === 'scheduled'){
+    flight.status = 'in_progress';
+    db.drones[droneIdx].state = 'in_flight';
+  } else if (flight.status === 'in_progress'){
+    flight.status = 'completed';
+    db.deliveries[deliveryIdx].status = 'delivered';
+    db.drones[droneIdx].state = 'idle';
+    // posiciona drone na dropoff
+    db.drones[droneIdx].currentLat = db.deliveries[deliveryIdx].dropoff.lat;
+    db.drones[droneIdx].currentLon = db.deliveries[deliveryIdx].dropoff.lon;
+  } else {
+    return res.status(400).json({ error: 'Cannot advance from current status' });
+  }
+
+  db.flights[idx] = flight;
+  writeDB(db);
+  return res.json({ ok: true, flight, drone: db.drones[droneIdx] });
+});
+
+// Endpoint de status consolidado dos drones
+app.get('/drones/status', (req,res) => {
+  const db = readDB();
+  return res.json(db.drones.map(d => ({ id: d.id, model: d.model, batteryPercent: d.batteryPercent, state: d.state || 'idle', currentLat: d.currentLat || null, currentLon: d.currentLon || null })));
 });
 
 // Atualizar um voo: permite alterar status (scheduled, in_progress, completed, cancelled)

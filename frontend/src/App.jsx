@@ -26,7 +26,7 @@ L.Icon.Default.mergeOptions({
 //  - onUpdate(id, payload): callback para atualizar um drone existente
 //  - onCancel(): cancela a edição
 function DroneForm({ onCreate, addToast, editing, onUpdate, onCancel }){
-  const [id,setId] = useState('')
+  const [id,setId] = useState('') // Mantido para modo edição; criação agora gera automaticamente no backend
   const [model,setModel] = useState('')
   const [maxWeight,setMaxWeight] = useState('')
   const [maxRange,setMaxRange] = useState('')
@@ -56,10 +56,11 @@ function DroneForm({ onCreate, addToast, editing, onUpdate, onCancel }){
         addToast && addToast({ message: 'Drone atualizado com sucesso', title: 'Sucesso', type: 'success' })
         onCancel && onCancel()
       } else {
-        await createDrone({ id, model, maxWeightKg: Number(maxWeight), maxRangeKm: Number(maxRange), batteryPercent: batteryPercent ? Number(batteryPercent) : undefined });
+        const resp = await createDrone({ model, maxWeightKg: Number(maxWeight), maxRangeKm: Number(maxRange), batteryPercent: batteryPercent ? Number(batteryPercent) : undefined });
+        const newId = resp && resp.drone ? resp.drone.id : null;
         setId(''); setModel(''); setMaxWeight(''); setMaxRange(''); setBatteryPercent('');
         onCreate && onCreate();
-        addToast && addToast({ message: 'Drone criado com sucesso', title: 'Sucesso', type: 'success' })
+        addToast && addToast({ message: newId ? `Drone criado (ID: ${newId})` : 'Drone criado', title: 'Sucesso', type: 'success' })
       }
     }catch(err){
       addToast && addToast({ message: err.message || 'Erro ao criar/atualizar drone', title: 'Erro', type: 'error' })
@@ -69,7 +70,9 @@ function DroneForm({ onCreate, addToast, editing, onUpdate, onCancel }){
   return (
     <form onSubmit={submit} style={{border:'1px solid #eee', padding:10}}>
       <h3>{editing ? 'Editar Drone' : 'Adicionar Drone'}</h3>
-      <input placeholder="id" value={id} onChange={e=>setId(e.target.value)} required disabled={!!editing} />
+      {editing && (
+        <input placeholder="id" value={id} disabled readOnly style={{background:'#f3f4f6'}} />
+      )}
       <input placeholder="modelo" value={model} onChange={e=>setModel(e.target.value)} required />
       <input placeholder="pesoMáx (kg)" value={maxWeight} onChange={e=>setMaxWeight(e.target.value)} required />
   <input placeholder="alcanceMáx (km)" value={maxRange} onChange={e=>setMaxRange(e.target.value)} required />
@@ -89,6 +92,7 @@ function DroneForm({ onCreate, addToast, editing, onUpdate, onCancel }){
 function DeliveryForm({ onCreate, addToast }){
   const [id,setId] = useState('')
   const [weight,setWeight] = useState('')
+  const [priority, setPriority] = useState('normal')
   const [pLat,setPLat] = useState('')
   const [pLon,setPLon] = useState('')
   const [dLat,setDLat] = useState('')
@@ -101,26 +105,45 @@ function DeliveryForm({ onCreate, addToast }){
 
   const submit = async (e)=>{
     e.preventDefault();
+    
+    // Validação: garantir que coordenadas foram preenchidas
+    if (!pLat || !pLon || !dLat || !dLon) {
+      addToast && addToast({ message: '⚠️ Preencha as coordenadas de coleta e entrega antes de criar', title: 'Atenção', type: 'warning' });
+      return;
+    }
+    
     try{
-      await createDelivery({ id, weightKg: Number(weight), pickup: { lat: Number(pLat), lon: Number(pLon) }, dropoff: { lat: Number(dLat), lon: Number(dLon) } });
-      setId(''); setWeight(''); setPLat(''); setPLon(''); setDLat(''); setDLon(''); setPAddress(''); setDAddress('');
+      const resp = await createDelivery({ 
+        weightKg: Number(weight), 
+        priority,
+        pickup: { lat: Number(pLat), lon: Number(pLon) }, 
+        dropoff: { lat: Number(dLat), lon: Number(dLon) } 
+      });
+      const createdId = resp && resp.delivery ? resp.delivery.id : null;
+      setId(''); setWeight(''); setPriority('normal'); setPLat(''); setPLon(''); setDLat(''); setDLon(''); setPAddress(''); setDAddress(''); setPResults([]); setDResults([]);
       onCreate && onCreate();
-      addToast && addToast({ message: 'Entrega criada com sucesso', title: 'Sucesso', type: 'success' })
+      addToast && addToast({ message: createdId ? `✅ Entrega criada (ID: ${createdId})` : '✅ Entrega criada', title: 'Sucesso', type: 'success' })
     }catch(err){
       addToast && addToast({ message: err.message || 'Erro ao criar entrega', title: 'Erro', type: 'error' })
     }
   }
 
-  // utiliza o forwardGeocode para preencher lat/lon a partir de um endereço
+  // utiliza geocoding direto via Nominatim (OSM) para preencher lat/lon a partir de um endereço
   async function geocodePickup(){
-    if (!pAddress) return addToast && addToast({ message: 'Informe o endereço de coleta primeiro', title: 'Atenção', type: 'error' })
+    if (!pAddress) return addToast && addToast({ message: 'Informe o endereço de coleta primeiro', title: 'Atenção', type: 'warning' })
     try{
       setGeoLoading(true)
-      const res = await forwardGeocode(pAddress)
-      if (!res || res.length === 0) return addToast && addToast({ message: 'Nenhum resultado encontrado para o endereço de coleta', title: 'Aviso', type: 'error' })
+      // Chama Nominatim diretamente, restringindo ao Brasil
+      const url = "https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=5&q=" + encodeURIComponent(pAddress);
+      const response = await fetch(url, {
+        headers: { "User-Agent": "DroneDeliveryDemo/1.0" }
+      });
+      const res = await response.json();
+      
+      if (!res || res.length === 0) return addToast && addToast({ message: 'Nenhum resultado encontrado para o endereço de coleta', title: 'Aviso', type: 'warning' })
       // show top results for user to choose
       setPResults(res.slice(0,5))
-      addToast && addToast({ message: `Foram encontrados ${res.length} resultado(s). Escolha abaixo.` , title: 'Resultados', type: 'info' })
+      addToast && addToast({ message: `${res.length} resultado(s) encontrado(s). Escolha o correto abaixo.` , title: 'Resultados', type: 'info' })
     }catch(err){
       addToast && addToast({ message: err.message || 'Erro ao geocodificar endereço', title: 'Erro', type: 'error' })
     }finally{
@@ -129,13 +152,18 @@ function DeliveryForm({ onCreate, addToast }){
   }
 
   async function geocodeDropoff(){
-    if (!dAddress) return addToast && addToast({ message: 'Informe o endereço de entrega primeiro', title: 'Atenção', type: 'error' })
+    if (!dAddress) return addToast && addToast({ message: 'Informe o endereço de entrega primeiro', title: 'Atenção', type: 'warning' })
     try{
       setGeoLoading(true)
-      const res = await forwardGeocode(dAddress)
-      if (!res || res.length === 0) return addToast && addToast({ message: 'Nenhum resultado encontrado para o endereço de entrega', title: 'Aviso', type: 'error' })
+      const url = "https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&limit=5&q=" + encodeURIComponent(dAddress);
+      const response = await fetch(url, {
+        headers: { "User-Agent": "DroneDeliveryDemo/1.0" }
+      });
+      const res = await response.json();
+      
+      if (!res || res.length === 0) return addToast && addToast({ message: 'Nenhum resultado encontrado para o endereço de entrega', title: 'Aviso', type: 'warning' })
       setDResults(res.slice(0,5))
-      addToast && addToast({ message: `Foram encontrados ${res.length} resultado(s). Escolha abaixo.` , title: 'Resultados', type: 'info' })
+      addToast && addToast({ message: `${res.length} resultado(s) encontrado(s). Escolha o correto abaixo.` , title: 'Resultados', type: 'info' })
     }catch(err){
       addToast && addToast({ message: err.message || 'Erro ao geocodificar endereço', title: 'Erro', type: 'error' })
     }finally{
@@ -160,12 +188,20 @@ function DeliveryForm({ onCreate, addToast }){
   }
 
   return (
-    <form onSubmit={submit} style={{border:'1px solid #eee', padding:10, marginTop:10}}>
+    <form onSubmit={submit} style={{border:'1px solid #eee', padding:10, marginTop:10, borderRadius:8}}>
       <h3>Adicionar Entrega</h3>
-      <input placeholder="ID" value={id} onChange={e=>setId(e.target.value)} required aria-label="ID da entrega" />
-      <input placeholder="Peso (kg)" value={weight} onChange={e=>setWeight(e.target.value)} required aria-label="Peso da entrega em kg" />
+      {/* Campo de ID removido: agora gerado automaticamente pelo backend */}
+      <input placeholder="Peso (kg)" value={weight} onChange={e=>setWeight(e.target.value)} required aria-label="Peso da entrega em kg" type="number" step="0.1" min="0" />
 
-      <label style={{fontSize:12, color:'#555'}}>Endereço (coleta)</label>
+      <label style={{fontSize:12, color:'#555', marginTop:8, display:'block'}}>Prioridade</label>
+      <select value={priority} onChange={e=>setPriority(e.target.value)} style={{width:'100%', padding:8, marginBottom:8}}>
+        <option value="low">Baixa</option>
+        <option value="normal">Normal</option>
+        <option value="medium">Média</option>
+        <option value="high">Alta</option>
+      </select>
+
+      <label style={{fontSize:12, color:'#555', marginTop:8, display:'block'}}>📍 Endereço de coleta</label>
       <div style={{display:'flex', gap:8}}>
         <input placeholder="Endereço (coleta)" value={pAddress} onChange={e=>setPAddress(e.target.value)} aria-label="Endereço de coleta" style={{flex:1}} />
         <button type="button" className="small-btn" onClick={geocodePickup} disabled={geoLoading || !pAddress}>{geoLoading ? '...' : 'Preencher coords'}</button>
@@ -182,11 +218,28 @@ function DeliveryForm({ onCreate, addToast }){
         </div>
       )}
       <div style={{display:'flex', gap:8, marginTop:6}}>
-        <input placeholder="Latitude (coleta)" value={pLat} onChange={e=>setPLat(e.target.value)} required aria-label="Latitude do ponto de coleta" />
-        <input placeholder="Longitude (coleta)" value={pLon} onChange={e=>setPLon(e.target.value)} required aria-label="Longitude do ponto de coleta" />
+        <input 
+          placeholder="Latitude (coleta)" 
+          value={pLat} 
+          readOnly 
+          aria-label="Latitude do ponto de coleta"
+          style={{background: pLat ? '#f0f9ff' : '#fff', cursor: 'not-allowed'}}
+        />
+        <input 
+          placeholder="Longitude (coleta)" 
+          value={pLon} 
+          readOnly 
+          aria-label="Longitude do ponto de coleta" 
+          style={{background: pLon ? '#f0f9ff' : '#fff', cursor: 'not-allowed'}}
+        />
       </div>
+      {pLat && pLon && (
+        <div style={{fontSize:11, color:'#059669', marginTop:4}}>
+          ✓ Coordenadas de coleta preenchidas: {parseFloat(pLat).toFixed(5)}, {parseFloat(pLon).toFixed(5)}
+        </div>
+      )}
 
-      <label style={{fontSize:12, color:'#555', marginTop:8}}>Endereço (entrega)</label>
+      <label style={{fontSize:12, color:'#555', marginTop:8, display:'block'}}>📍 Endereço de entrega</label>
       <div style={{display:'flex', gap:8}}>
         <input placeholder="Endereço (entrega)" value={dAddress} onChange={e=>setDAddress(e.target.value)} aria-label="Endereço de entrega" style={{flex:1}} />
         <button type="button" className="small-btn" onClick={geocodeDropoff} disabled={geoLoading || !dAddress}>{geoLoading ? '...' : 'Preencher coords'}</button>
@@ -203,12 +256,45 @@ function DeliveryForm({ onCreate, addToast }){
         </div>
       )}
       <div style={{display:'flex', gap:8, marginTop:6}}>
-        <input placeholder="Latitude (entrega)" value={dLat} onChange={e=>setDLat(e.target.value)} required aria-label="Latitude do ponto de entrega" />
-        <input placeholder="Longitude (entrega)" value={dLon} onChange={e=>setDLon(e.target.value)} required aria-label="Longitude do ponto de entrega" />
+        <input 
+          placeholder="Latitude (entrega)" 
+          value={dLat} 
+          readOnly 
+          aria-label="Latitude do ponto de entrega" 
+          style={{background: dLat ? '#f0f9ff' : '#fff', cursor: 'not-allowed'}}
+        />
+        <input 
+          placeholder="Longitude (entrega)" 
+          value={dLon} 
+          readOnly 
+          aria-label="Longitude do ponto de entrega" 
+          style={{background: dLon ? '#f0f9ff' : '#fff', cursor: 'not-allowed'}}
+        />
       </div>
+      {dLat && dLon && (
+        <div style={{fontSize:11, color:'#059669', marginTop:4}}>
+          ✓ Coordenadas de entrega preenchidas: {parseFloat(dLat).toFixed(5)}, {parseFloat(dLon).toFixed(5)}
+        </div>
+      )}
 
-      <div style={{marginTop:8}}>
-        <button type="submit">Criar Entrega</button>
+      <div style={{marginTop:16, paddingTop:12, borderTop:'1px solid #eee'}}>
+        <button 
+          type="submit" 
+          disabled={!pLat || !pLon || !dLat || !dLon}
+          style={{
+            width:'100%',
+            padding:'10px',
+            background: (pLat && pLon && dLat && dLon) ? '#2563eb' : '#94a3b8',
+            color:'white',
+            border:'none',
+            borderRadius:6,
+            cursor: (pLat && pLon && dLat && dLon) ? 'pointer' : 'not-allowed',
+            fontSize:14,
+            fontWeight:500
+          }}
+        >
+          {(pLat && pLon && dLat && dLon) ? '✓ Criar Entrega' : '⚠️ Preencha as coordenadas primeiro'}
+        </button>
       </div>
     </form>
   )
