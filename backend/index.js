@@ -474,7 +474,7 @@ try{
       f.displayId = `Ordem de serviço ${f.orderNumber}`;
     }
   }
-
+//
   writeDB(db0);
   console.log('Migration: ensured nextOrderNumber and migrated flights. nextOrderNumber=', db0.nextOrderNumber);
 }catch(e){
