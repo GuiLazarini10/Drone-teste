@@ -1,6 +1,5 @@
 node_modules/
 frontend/node_modules/
-backend/db.json
 dist/
 .env
 .DS_Store
