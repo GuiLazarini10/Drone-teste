@@ -156,3 +156,11 @@ export async function forwardGeocode(query){
   if (!r.ok) throw new Error(data.error || JSON.stringify(data));
   return data.results || [];
 }
+
+// Remove todas as entregas canceladas em lote
+export async function purgeCancelledDeliveries(){
+  const r = await fetch(`${BASE}/deliveries-bulk/purge-cancelled`, { method: 'DELETE' });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}

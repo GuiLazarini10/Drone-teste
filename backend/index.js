@@ -602,6 +602,18 @@ app.delete('/deliveries/:id', (req, res) => {
   return res.json({ ok: true, removed });
 });
 
+// Remover em lote todas as entregas canceladas: DELETE /deliveries/cancelled
+// Útil para limpar visual da UI. Não mexe em flightHistory.
+// Endpoint de limpeza em lote separado para evitar conflito com /deliveries/:id
+app.delete('/deliveries-bulk/purge-cancelled', (req, res) => {
+  const db = readDB();
+  const before = db.deliveries.length;
+  db.deliveries = db.deliveries.filter(d => d.status !== 'cancelled');
+  const removed = before - db.deliveries.length;
+  writeDB(db);
+  return res.json({ ok: true, removed });
+});
+
 // Cancelar uma entrega (POST /deliveries/:id/cancel)
 // Se houver um voo ativo para esta entrega, o voo é cancelado/arquivado e a bateria é reembolsada.
 app.post('/deliveries/:id/cancel', (req, res) => {

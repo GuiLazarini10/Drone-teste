@@ -884,7 +884,25 @@ export default function App(){
     if(activePage === 'entregas'){
       return (
         <div className="card">
-          <h2>Entregas</h2>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <h2 style={{margin:0}}>Entregas</h2>
+            {deliveries.some(d => d.status === 'cancelled') && (
+              <button
+                className="small-btn"
+                onClick={async ()=>{
+                  try{
+                    const ok = window.confirm('Remover definitivamente todas as entregas canceladas?');
+                    if(!ok) return;
+                    const resp = await purgeCancelledDeliveries();
+                    addToast({ title:'Limpeza', message:`Removidas ${resp.removed} entrega(s) canceladas`, type:'success' });
+                    await load();
+                  }catch(err){
+                    addToast({ title:'Erro', message: err.message || 'Falha ao limpar canceladas', type:'error' });
+                  }
+                }}
+              >Limpar canceladas</button>
+            )}
+          </div>
           {deliveries.map(d => (
             <div key={d.id} className="delivery-card">
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
