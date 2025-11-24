@@ -5,38 +5,49 @@ Pequeno projeto de exemplo para gerenciar drones, entregas e voos.
 Resumo rápido
 - Backend: Node.js + Express (pasta `backend`, porta 4000).
 - Frontend: React + Vite (pasta `frontend`, porta 5173 por padrão).
+- Fila de entregas por prioridade (high/medium/normal/low) e ordem FIFO.
+- Simulação de estados do drone (`idle`, `loading`, `in_flight`) e avanço de voo.
+- Obstáculos de exclusão aérea (circulares) bloqueiam rotas.
+- **Geocodificação automática**: Digite apenas o endereço, o sistema busca as coordenadas automaticamente via Nominatim (OpenStreetMap).
+- **ID automático para entregas e drones**: ambos gerados pelo backend se omitidos.
+- Interface melhorada com validação visual e campos readonly para coordenadas.
 
-Passos simples para rodar (Windows PowerShell)
+Passos simples para rodar (Windows PowerShell) em QUALQUER máquina
 
-1) Instalar dependências
-
+Clone o repositório:
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste\backend
-npm install
-
-Set-Location C:\Users\guila\Desktop\Drone-teste\frontend
-npm install
+git clone <URL-do-repo> Drone-teste
+cd Drone-teste
 ```
 
-2) Iniciar o backend
-
+1) Instalar dependências (método manual):
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste\backend
-node index.js
-# deve responder {"ok":true} em /health
+cd backend; npm install; cd ..\frontend; npm install; cd ..
 ```
 
-3) Iniciar o frontend
-
+2) Iniciar manualmente (em dois terminais):
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste\frontend
-npm run dev
+cd backend; node index.js   # porta 4000
+cd frontend; npm run dev    # porta 5173
+```
+
+OU usar script automático (instala se faltar e sobe ambos):
+```powershell
+./scripts/start-all.ps1 -Install   # primeira vez
+./scripts/start-all.ps1            # próximas vezes
 ```
 
 4) Usar a aplicação
 - Abra a URL mostrada pelo Vite no navegador (algo como http://127.0.0.1:5173).
-- No formulário "Adicionar Entrega", escreva o endereço e clique em "Preencher coords".
-- O sistema mostra até 5 resultados; clique no resultado correto para preencher latitude e longitude.
+- **Nova UX melhorada**: No formulário "Adicionar Entrega" (sem campo de ID):
+  - Digite apenas o endereço de coleta (ex.: "Rua XV de Novembro, 500, Curitiba, PR")
+  - Clique em "Preencher coords" - o sistema busca automaticamente via Nominatim
+  - Escolha o resultado correto da lista
+  - Repita para o endereço de entrega
+  - As coordenadas aparecem automaticamente como readonly (fundo azul claro)
+  - O botão só fica ativo quando ambas as coordenadas estão preenchidas
+  - Após criar, um toast mostra o ID gerado automaticamente
+- Para testes avançados de despacho, você pode criar múltiplas entregas e chamar `POST /flights` sem `deliveryId` para seleção automática da próxima entrega viável.
 
 Problemas comuns
 - Se aparecer "Failed to fetch" ao clicar em "Preencher coords": verifique se o backend está rodando em `http://127.0.0.1:4000`.
@@ -68,11 +79,9 @@ O que foi adicionado automaticamente
 - `backend/db.example.json` — exemplo limpo do banco para você publicar em vez do `db.json` real.
 - `scripts/create-branch-and-push.ps1` — script PowerShell que cria um branch `prepare-for-github`, comita alterações e tenta dar push para o remote `origin`.
 
-Como usar o script (PowerShell):
-
+Como usar script de branch (PowerShell):
 ```powershell
-Set-Location C:\Users\guila\Desktop\Drone-teste
-.\scripts\create-branch-and-push.ps1 -BranchName "prepare-for-github" -Remote "origin"
+./scripts/create-branch-and-push.ps1 -BranchName "prepare-for-github" -Remote "origin"
 ```
 
 Se não tiver um remote ainda, adicione antes com:
@@ -87,21 +96,17 @@ Demo projeto para gerenciar drones, entregas e voos (Node.js backend + React + V
 ## Como rodar (Windows PowerShell)
 
 1. Backend
-
 ```powershell
-cd 'C:\Users\guila\Desktop\Drone-teste\backend'
+cd backend
 npm install
 node index.js
-# O backend deve ficar disponível em http://127.0.0.1:4000
 ```
 
 2. Frontend
-
 ```powershell
-cd 'C:\Users\guila\Desktop\Drone-teste\frontend'
+cd frontend
 npm install
 npm run dev
-# O Vite normalmente expõe a UI em http://localhost:5173
 ```
 
 ## Testes e exemplos (PowerShell-safe)
@@ -112,11 +117,40 @@ npm run dev
 Invoke-RestMethod -Uri 'http://127.0.0.1:4000/health'
 ```
 
-- Criar entrega (exemplo):
+- Executar testes automatizados:
 
 ```powershell
-$body = @{ id = 'test-del'; weightKg = 1; pickup = @{ lat = -23.5; lon = -46.6 }; dropoff = @{ lat = -23.6; lon = -46.7 } } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/deliveries' -ContentType 'application/json' -Body $body
+cd C:\Users\guila\Documents\Drone-teste\backend
+npm test
+```
+
+- Limpar dados de teste do banco:
+
+```powershell
+cd C:\Users\guila\Documents\Drone-teste\backend
+npm run cleanup
+```
+
+### Criar entrega (exemplo - ID gerado automaticamente)
+
+```powershell
+$body = @{ weightKg = 1; pickup = @{ lat = -23.5; lon = -46.6 }; dropoff = @{ lat = -23.6; lon = -46.7 }; priority = 'high' } | ConvertTo-Json
+$resp = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/deliveries' -ContentType 'application/json' -Body $body
+"ID entrega gerado: $($resp.delivery.id)"
+### Criar drone (exemplo - ID gerado automaticamente)
+
+```powershell
+$drone = @{ model='Demo'; maxWeightKg=10; maxRangeKm=50; batteryPercent=100 } | ConvertTo-Json
+$respDrone = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/drones' -ContentType 'application/json' -Body $drone
+"ID drone gerado: $($respDrone.drone.id)"
+```
+
+# Criar obstáculo circular (ex.: raio 1km)
+$obs = @{ id = 'zona-1'; type='circle'; lat=-23.55; lon=-46.63; radiusKm=1 } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/obstacles' -ContentType 'application/json' -Body $obs
+
+# Listar obstáculos
+Invoke-RestMethod -Uri 'http://127.0.0.1:4000/obstacles'
 ```
 
 - Agendar voo (usar ConvertTo-Json ou arquivo para evitar problemas de escape no PowerShell):
@@ -124,6 +158,15 @@ Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/deliveries' -ContentT
 ```powershell
 $body = @{ deliveryId = 'test-del' } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/flights' -ContentType 'application/json' -Body $body
+
+# Agendar voo automático (sem deliveryId -> escolhe a melhor pendente)
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/flights' -ContentType 'application/json' -Body '{}'
+
+# Avançar estado do voo (scheduled -> in_progress -> completed)
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:4000/flights/$($resp.flight.id)/advance"
+
+# Status dos drones
+Invoke-RestMethod -Uri 'http://127.0.0.1:4000/drones/status'
 ```
 
 ## Observações
@@ -133,7 +176,7 @@ Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:4000/flights' -ContentType
 - Se o `git commit` falhar localmente por falta de configuração de usuário, configure:
 
 ```powershell
-cd 'C:\Users\guila\Desktop\Drone-teste'
+cd 'Drone-teste'
 git config user.name "GuiLazarini10"
 git config user.email "guilazarini10@gmail.com"
 ```
