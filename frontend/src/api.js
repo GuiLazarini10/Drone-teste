@@ -14,6 +14,13 @@ export async function createDrone(payload){
   return data;
 }
 
+export async function updateDrone(id, payload){
+  const r = await fetch(`${BASE}/drones/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
 export async function fetchDeliveries(){
   const r = await fetch(`${BASE}/deliveries`);
   const data = await r.json();

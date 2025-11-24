@@ -29,6 +29,23 @@ app.post('/drones', (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// Update a drone: PUT /drones/:id
+app.put('/drones/:id', (req, res) => {
+  const db = readDB();
+  const id = req.params.id;
+  const existingIndex = db.drones.findIndex(d => d.id === id);
+  if (existingIndex === -1) return res.status(404).json({ error: 'Drone not found' });
+  const body = req.body || {};
+  // Only allow updating certain fields
+  const allowed = ['model', 'maxWeightKg', 'maxRangeKm', 'batteryPercent'];
+  for (const k of Object.keys(body)){
+    if (!allowed.includes(k)) continue;
+    db.drones[existingIndex][k] = body[k];
+  }
+  writeDB(db);
+  res.json({ ok: true, drone: db.drones[existingIndex] });
+});
+
 app.get('/deliveries', (req, res) => res.json(readDB().deliveries));
 app.post('/deliveries', (req, res) => {
   const db = readDB();

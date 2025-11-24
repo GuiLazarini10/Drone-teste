@@ -1,33 +1,56 @@
 import React, { useEffect, useState } from 'react'
-import { fetchDrones, createDrone, fetchDeliveries, createDelivery, scheduleFlight, fetchFlights } from './api'
+import { fetchDrones, createDrone, fetchDeliveries, createDelivery, scheduleFlight, fetchFlights, updateDrone } from './api'
 import Toasts from './Toast'
 
-function DroneForm({ onCreate, addToast }){
+function DroneForm({ onCreate, addToast, editing, onUpdate, onCancel }){
   const [id,setId] = useState('')
   const [model,setModel] = useState('')
   const [maxWeight,setMaxWeight] = useState('')
   const [maxRange,setMaxRange] = useState('')
 
+  useEffect(()=>{
+    if (editing){
+      setId(editing.id || '')
+      setModel(editing.model || '')
+      setMaxWeight(editing.maxWeightKg || '')
+      setMaxRange(editing.maxRangeKm || '')
+    } else {
+      setId('')
+      setModel('')
+      setMaxWeight('')
+      setMaxRange('')
+    }
+  }, [editing])
+
   const submit = async (e)=>{
     e.preventDefault();
     try{
-      await createDrone({ id, model, maxWeightKg: Number(maxWeight), maxRangeKm: Number(maxRange) });
-      setId(''); setModel(''); setMaxWeight(''); setMaxRange('');
-      onCreate && onCreate();
-      addToast && addToast({ message: 'Drone criado com sucesso', title: 'Sucesso', type: 'success' })
+      if (editing && onUpdate){
+        await onUpdate(editing.id, { model, maxWeightKg: Number(maxWeight), maxRangeKm: Number(maxRange) })
+        addToast && addToast({ message: 'Drone atualizado com sucesso', title: 'Sucesso', type: 'success' })
+        onCancel && onCancel()
+      } else {
+        await createDrone({ id, model, maxWeightKg: Number(maxWeight), maxRangeKm: Number(maxRange) });
+        setId(''); setModel(''); setMaxWeight(''); setMaxRange('');
+        onCreate && onCreate();
+        addToast && addToast({ message: 'Drone criado com sucesso', title: 'Sucesso', type: 'success' })
+      }
     }catch(err){
-      addToast && addToast({ message: err.message || 'Erro ao criar drone', title: 'Erro', type: 'error' })
+      addToast && addToast({ message: err.message || 'Erro ao criar/atualizar drone', title: 'Erro', type: 'error' })
     }
   }
 
   return (
     <form onSubmit={submit} style={{border:'1px solid #eee', padding:10}}>
-      <h3>Adicionar Drone</h3>
-      <input placeholder="id" value={id} onChange={e=>setId(e.target.value)} required />
+      <h3>{editing ? 'Editar Drone' : 'Adicionar Drone'}</h3>
+      <input placeholder="id" value={id} onChange={e=>setId(e.target.value)} required disabled={!!editing} />
       <input placeholder="modelo" value={model} onChange={e=>setModel(e.target.value)} required />
       <input placeholder="pesoMáx (kg)" value={maxWeight} onChange={e=>setMaxWeight(e.target.value)} required />
       <input placeholder="alcanceMáx (km)" value={maxRange} onChange={e=>setMaxRange(e.target.value)} required />
-      <button type="submit">Criar Drone</button>
+      <div style={{marginTop:8}}>
+        <button type="submit">{editing ? 'Salvar' : 'Criar Drone'}</button>
+        {editing && <button type="button" onClick={onCancel} style={{marginLeft:8}}>Cancelar</button>}
+      </div>
     </form>
   )
 }
@@ -68,6 +91,7 @@ function DeliveryForm({ onCreate, addToast }){
 
 export default function App(){
   const [drones,setDrones] = useState([])
+  const [editingDrone, setEditingDrone] = useState(null)
   const [deliveries,setDeliveries] = useState([])
   const [flights,setFlights] = useState([])
   const [toasts, setToasts] = useState([])
@@ -85,6 +109,16 @@ export default function App(){
     setDrones(await fetchDrones())
     setDeliveries(await fetchDeliveries())
     setFlights(await fetchFlights())
+  }
+
+  async function handleUpdateDrone(id, payload){
+    // call api update
+    try{
+      await updateDrone(id, payload)
+      await load()
+    }catch(err){
+      throw err
+    }
   }
 
   useEffect(()=>{ load() }, [])
@@ -145,7 +179,7 @@ export default function App(){
                     <div style={{textAlign:'right'}}>
                       {dr.batteryPercent >= 60 ? <div className="badge-green">OK</div> : dr.batteryPercent >= 30 ? <div className="badge-orange">BAIXA</div> : <div className="badge-red">CRÍTICA</div>}
                       <div style={{marginTop:8}}>
-                        <button className="small-btn">Editar</button>
+                        <button className="small-btn" onClick={()=>setEditingDrone(dr)}>Editar</button>
                         <button className="small-btn primary" style={{marginLeft:8}}>Ações</button>
                       </div>
                     </div>
@@ -155,22 +189,28 @@ export default function App(){
 
               <div className="card">
                 <h2>Entregas</h2>
-                {deliveries.map(d => (
-                  <div key={d.id} className="delivery-card">
-                    <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                      <div>
-                        <div style={{fontWeight:700}}>{d.id} <span style={{color:'#666', fontSize:13}}>— {d.status}</span></div>
-                        <div style={{color:'#666', fontSize:13}}>peso: {d.weightKg} kg</div>
-                        <div style={{color:'#666', fontSize:12}}>de: {d.pickup?.lat},{d.pickup?.lon} → para: {d.dropoff?.lat},{d.dropoff?.lon}</div>
-                      </div>
-                      <div style={{textAlign:'right'}}>
-                        <button className="small-btn primary" onClick={()=>handleSchedule(d.id)} disabled={d.status !== 'pending'}>Agendar voo</button>
+                {drones.map(dr => (
+                  <div key={dr.id} className="drone-card">
+                    <div>
+                      <div style={{fontWeight:700}}>{dr.model}</div>
+                      <div className="drone-meta">{dr.maxWeightKg} kg • {dr.maxRangeKm} km</div>
+                    </div>
+                    <div style={{textAlign:'right'}}>
+                      {dr.batteryPercent >= 60 ? <div className="badge-green">OK</div> : dr.batteryPercent >= 30 ? <div className="badge-orange">BAIXA</div> : <div className="badge-red">CRÍTICA</div>}
+                      <div style={{marginTop:8}}>
+                        <button className="small-btn" onClick={()=>setEditingDrone(dr)}>Editar</button>
+                        <button className="small-btn primary" style={{marginLeft:8}}>Ações</button>
                       </div>
                     </div>
                   </div>
                 ))}
-              </div>
 
+
+              {editingDrone && (
+                <div className="card" style={{marginTop:12}}>
+                  <DroneForm editing={editingDrone} onUpdate={handleUpdateDrone} onCancel={()=>setEditingDrone(null)} addToast={addToast} />
+                </div>
+              )}
               <div className="card">
                 <h2>Voos</h2>
                 {flights.length === 0 && <div style={{color:'#666'}}>Nenhum voo ainda</div>}
