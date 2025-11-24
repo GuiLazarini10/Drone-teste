@@ -250,6 +250,16 @@ app.get('/flight-history', (req, res) => {
   return res.json(db.flightHistory || []);
 });
 
+// Limpar todo o histórico de voos: DELETE /flight-history
+// Retorna quantidade removida. Não altera nextOrderNumber (mantém sequenciamento).
+app.delete('/flight-history', (req, res) => {
+  const db = readDB();
+  const count = (db.flightHistory || []).length;
+  db.flightHistory = [];
+  writeDB(db);
+  return res.json({ ok: true, removed: count });
+});
+
 // Debug: listar rotas registradas (útil para verificar se endpoints foram carregados)
 app.get('/_routes', (req, res) => {
   try{

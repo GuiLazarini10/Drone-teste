@@ -114,6 +114,14 @@ export async function fetchFlightHistory(){
   return data;
 }
 
+// Limpa todo o histórico de voos arquivados
+export async function clearFlightHistory(){
+  const r = await fetch(`${BASE}/flight-history`, { method: 'DELETE' });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
 // Reverse geocoding via backend proxy (return object { display_name, address })
 // Simple in-memory cache to avoid repeated reverse-geocoding calls during a dev session
 const _reverseCache = new Map();

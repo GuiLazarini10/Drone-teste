@@ -1011,7 +1011,25 @@ export default function App(){
     if(activePage === 'history'){
       return (
         <div className="card">
-          <h2>Histórico de Voos</h2>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <h2 style={{margin:0}}>Histórico de Voos</h2>
+            {flightHistory.length > 0 && (
+              <button
+                className="small-btn"
+                onClick={async ()=>{
+                  try{
+                    const ok = window.confirm('Limpar todo o histórico de voos arquivados? Esta ação é irreversível.');
+                    if(!ok) return;
+                    const resp = await clearFlightHistory();
+                    setFlightHistory([]);
+                    addToast({ title:'Histórico limpo', message:`Removidos ${resp.removed} registro(s)`, type:'success' });
+                  }catch(err){
+                    addToast({ title:'Erro', message: err.message || 'Falha ao limpar histórico', type:'error' });
+                  }
+                }}
+              >Limpar histórico</button>
+            )}
+          </div>
           {flightHistory.length === 0 && <div style={{color:'#666'}}>Nenhum voo arquivado</div>}
           {flightHistory.map(h => (
             <div key={h.id} style={{marginBottom:12}}>
