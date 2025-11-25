@@ -42,12 +42,14 @@ Sistema completo de gerenciamento de drones para entregas com simulação em tem
 
 ## ⚡ Como Iniciar (2 passos)
 
-### Passo 1: Primeira vez
+### Windows (PowerShell)
+
+**Passo 1: Primeira vez**
 ```powershell
 .\scripts\start-all.ps1 -Install
 ```
 
-### Passo 2: Próximas vezes
+**Passo 2: Próximas vezes**
 ```powershell
 .\scripts\start-all.ps1
 ```
@@ -60,9 +62,28 @@ Para encerrar: feche as janelas PowerShell ou pressione `Ctrl+C` nelas.
 
 ---
 
+### Linux/macOS (Bash)
+
+**Passo 1: Primeira vez**
+```bash
+chmod +x scripts/start-all.sh
+./scripts/start-all.sh --install
+```
+
+**Passo 2: Próximas vezes**
+```bash
+./scripts/start-all.sh
+```
+
+**Processos rodam em background.** Use os comandos exibidos para ver logs ou encerrar.
+
+---
+
 ## 📖 Como rodar (detalhes)
 
 ### Opção 1: Script Automático (Recomendado)
+
+**Windows:**
 ```powershell
 # Primeira vez (instala dependências)
 .\scripts\start-all.ps1 -Install
@@ -71,23 +92,33 @@ Para encerrar: feche as janelas PowerShell ou pressione `Ctrl+C` nelas.
 .\scripts\start-all.ps1
 ```
 
+**Linux/macOS:**
+```bash
+# Primeira vez (instala dependências)
+chmod +x scripts/start-all.sh
+./scripts/start-all.sh --install
+
+# Próximas vezes
+./scripts/start-all.sh
+```
+
 ### Opção 2: Manual
 
-1. Backend
-```powershell
+**Backend:**
+```bash
 cd backend
 npm install
 node index.js
 ```
 
-2. Frontend
-```powershell
+**Frontend (em outro terminal):**
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-3. Acesse no navegador: http://localhost:5173
+**Acesse:** http://localhost:5173
 
 ## 🧪 Testes Automatizados
 
