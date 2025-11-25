@@ -40,7 +40,27 @@ Sistema completo de gerenciamento de drones para entregas com simulação em tem
 - Visualização de bateria com indicador de reserva
 - Localização de drones em tempo real
 
-## Como rodar (Windows PowerShell)
+## ⚡ Como Iniciar (2 passos)
+
+### Passo 1: Primeira vez
+```powershell
+.\scripts\start-all.ps1 -Install
+```
+
+### Passo 2: Próximas vezes
+```powershell
+.\scripts\start-all.ps1
+```
+
+**Pronto!** Duas janelas PowerShell se abrirão (backend e frontend). 
+- Backend: http://localhost:4000
+- Frontend: http://localhost:5173
+
+Para encerrar: feche as janelas PowerShell ou pressione `Ctrl+C` nelas.
+
+---
+
+## 📖 Como rodar (detalhes)
 
 ### Opção 1: Script Automático (Recomendado)
 ```powershell

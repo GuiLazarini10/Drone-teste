@@ -52,8 +52,8 @@ try {
 } catch { }
 
 Write-Host "[START] Backend (porta 4000)" -ForegroundColor Green
-Start-Process -FilePath node -WorkingDirectory $backend -ArgumentList 'index.js'
-Start-Sleep -Seconds 2
+Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$backend'; node index.js" -WindowStyle Minimized
+Start-Sleep -Seconds 3
 
 # Verificar saúde
 try {
@@ -62,6 +62,9 @@ try {
 } catch { Write-Host "[ERRO] Backend não respondeu em /health" -ForegroundColor Red }
 
 Write-Host "[START] Frontend (porta padrão 5173)" -ForegroundColor Green
-Start-Process -FilePath npm -WorkingDirectory $frontend -ArgumentList 'run dev'
+Start-Process powershell -ArgumentList "-NoExit","-Command","cd '$frontend'; npm run dev"
 
-Write-Host "\nProjeto iniciado. Acesse a UI quando o Vite exibir a URL (ex.: http://localhost:5173)." -ForegroundColor Cyan
+Write-Host "`n[SUCESSO] Projeto iniciado!" -ForegroundColor Green
+Write-Host "Backend: http://localhost:4000" -ForegroundColor Cyan
+Write-Host "Frontend: http://localhost:5173 (aguarde Vite compilar)" -ForegroundColor Cyan
+Write-Host "`nDuas janelas PowerShell foram abertas. Para encerrar, feche-as ou use Ctrl+C nelas." -ForegroundColor Yellow
