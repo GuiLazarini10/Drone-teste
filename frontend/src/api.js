@@ -10,6 +10,14 @@ export async function fetchDrones(){
   return data;
 }
 
+// Status consolidado dos drones (inclui posição atual, estado e bateria reservada)
+export async function fetchDronesStatus(){
+  const r = await fetch(`${BASE}/drones/status`);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
 // Cria um novo drone (payload: { id, model, maxWeightKg, maxRangeKm, batteryPercent? })
 export async function createDrone(payload){
   const r = await fetch(`${BASE}/drones`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });

@@ -55,7 +55,9 @@ app.post('/drones', (req, res) => {
     model: d.model,
     maxWeightKg: Number(d.maxWeightKg),
     maxRangeKm: Number(d.maxRangeKm),
-    batteryPercent: typeof d.batteryPercent === 'number' ? d.batteryPercent : 100
+    batteryPercent: typeof d.batteryPercent === 'number' ? d.batteryPercent : 100,
+    state: 'idle', // Estado inicial sempre idle
+    reservedBatteryPercent: 0 // Nenhuma bateria reservada inicialmente
   };
   db.drones.push(newDrone);
   writeDB(db);
@@ -117,6 +119,8 @@ app.delete('/drones/:id', (req, res) => {
 app.get('/deliveries', (req, res) => res.json(readDB().deliveries));
 // prioridades aceitas e seu peso de ordenação para fila
 const PRIORITY_ORDER = { low: 1, normal: 1, media: 2, medium: 2, alta: 3, high: 3 }; // aceita pt/en
+// Velocidade de cruzeiro para estimar duração dos voos
+const CRUISE_SPEED_KMH = 36; // ~10 m/s
 
 // ===================== Obstáculos =====================
 // Representação simples de obstáculos (zonas de exclusão aérea)
@@ -417,10 +421,12 @@ app.post('/flights', (req, res) => {
 
   const feasible = candidates
     .map((dr) => {
+      if (typeof dr.reservedBatteryPercent !== 'number') dr.reservedBatteryPercent = 0;
       const withinRange = distanceKm <= dr.maxRangeKm;
       const requiredBattery = Math.min(100, Math.ceil((distanceKm / dr.maxRangeKm) * 100 * 1.2));
-      const hasBattery = dr.batteryPercent >= requiredBattery;
-      return { dr, withinRange, requiredBattery, hasBattery };
+      const availableBattery = dr.batteryPercent - dr.reservedBatteryPercent;
+      const hasBattery = availableBattery >= requiredBattery;
+      return { dr, withinRange, requiredBattery, hasBattery, availableBattery };
     })
     .filter((x) => x.withinRange && x.hasBattery);
 
@@ -442,14 +448,20 @@ app.post('/flights', (req, res) => {
     droneId: chosen.dr.id,
     distanceKm: Number(distanceKm.toFixed(3)),
     requiredBattery: chosen.requiredBattery,
+    batteryConsumed: 0,
+    progress: 0,
+    estimatedDurationSec: Math.max(5, Math.round((distanceKm / CRUISE_SPEED_KMH) * 3600)),
     status: 'scheduled',
     scheduledAt: new Date().toISOString(),
+    startedAt: null,
+    completedAt: null,
     orderNumber: (db.nextOrderNumber || 1),
     displayId: `Ordem de serviço ${db.nextOrderNumber || 1}`,
   };
 
   const droneIndex = db.drones.findIndex((d) => d.id === chosen.dr.id);
-  db.drones[droneIndex].batteryPercent = Math.max(0, db.drones[droneIndex].batteryPercent - chosen.requiredBattery);
+  if (typeof db.drones[droneIndex].reservedBatteryPercent !== 'number') db.drones[droneIndex].reservedBatteryPercent = 0;
+  db.drones[droneIndex].reservedBatteryPercent = Math.min(100, db.drones[droneIndex].reservedBatteryPercent + chosen.requiredBattery);
   // estado e posição inicial do drone (simplificado: assume pickup como origem de voo)
   db.drones[droneIndex].state = 'loading';
   db.drones[droneIndex].currentLat = delivery.pickup.lat;
@@ -480,14 +492,25 @@ app.post('/flights/:id/advance', (req,res) => {
 
   if (flight.status === 'scheduled'){
     flight.status = 'in_progress';
+    flight.startedAt = new Date().toISOString();
     db.drones[droneIdx].state = 'in_flight';
   } else if (flight.status === 'in_progress'){
     flight.status = 'completed';
+    flight.completedAt = new Date().toISOString();
     db.deliveries[deliveryIdx].status = 'delivered';
     db.drones[droneIdx].state = 'idle';
-    // posiciona drone na dropoff
     db.drones[droneIdx].currentLat = db.deliveries[deliveryIdx].dropoff.lat;
     db.drones[droneIdx].currentLon = db.deliveries[deliveryIdx].dropoff.lon;
+    // consumir bateria restante (se não foi toda consumida na simulação)
+    const remaining = (flight.requiredBattery || 0) - (flight.batteryConsumed || 0);
+    if (remaining > 0){
+      if (typeof db.drones[droneIdx].reservedBatteryPercent === 'number'){
+        db.drones[droneIdx].reservedBatteryPercent = Math.max(0, db.drones[droneIdx].reservedBatteryPercent - remaining);
+      }
+      db.drones[droneIdx].batteryPercent = Math.max(0, db.drones[droneIdx].batteryPercent - remaining);
+      flight.batteryConsumed = flight.requiredBattery;
+      flight.progress = 1;
+    }
   } else {
     return res.status(400).json({ error: 'Cannot advance from current status' });
   }
@@ -500,7 +523,7 @@ app.post('/flights/:id/advance', (req,res) => {
 // Endpoint de status consolidado dos drones
 app.get('/drones/status', (req,res) => {
   const db = readDB();
-  return res.json(db.drones.map(d => ({ id: d.id, model: d.model, batteryPercent: d.batteryPercent, state: d.state || 'idle', currentLat: d.currentLat || null, currentLon: d.currentLon || null })));
+  return res.json(db.drones.map(d => ({ id: d.id, model: d.model, batteryPercent: d.batteryPercent, reservedBatteryPercent: d.reservedBatteryPercent || 0, state: d.state || 'idle', currentLat: d.currentLat || null, currentLon: d.currentLon || null })));
 });
 
 // Atualizar um voo: permite alterar status (scheduled, in_progress, completed, cancelled)
@@ -526,10 +549,16 @@ app.put('/flights/:id', (req, res) => {
       // handle transitions
       const prev = flight.status;
       if (newStatus === 'cancelled' && prev !== 'cancelled'){
-        // try to find drone and refund battery
+        // liberar somente bateria não consumida
         const di = db.drones.findIndex(d => d.id === flight.droneId);
         if (di !== -1){
-          db.drones[di].batteryPercent = Math.min(100, (db.drones[di].batteryPercent || 0) + (flight.requiredBattery || 0));
+          const consumed = flight.batteryConsumed || 0;
+          const remaining = (flight.requiredBattery || 0) - consumed;
+          if (remaining > 0){
+            if (typeof db.drones[di].reservedBatteryPercent === 'number'){
+              db.drones[di].reservedBatteryPercent = Math.max(0, db.drones[di].reservedBatteryPercent - remaining);
+            }
+          }
         }
         // revert delivery state if in_transit
         const deli = db.deliveries.findIndex(d => d.id === flight.deliveryId);
@@ -570,10 +599,16 @@ app.delete('/flights/:id', (req, res) => {
   const di = db.deliveries.findIndex(d => d.id === flight.deliveryId);
   if (di !== -1 && db.deliveries[di].status === 'in_transit') db.deliveries[di].status = 'pending';
 
-  // Reembolsar a bateria do drone (com cap em 100)
+  // Liberar bateria não consumida
   const dri = db.drones.findIndex(d => d.id === flight.droneId);
   if (dri !== -1 && typeof flight.requiredBattery !== 'undefined'){
-    db.drones[dri].batteryPercent = Math.min(100, (db.drones[dri].batteryPercent || 0) + flight.requiredBattery);
+    const consumed = flight.batteryConsumed || 0;
+    const remaining = flight.requiredBattery - consumed;
+    if (remaining > 0){
+      if (typeof db.drones[dri].reservedBatteryPercent === 'number'){
+        db.drones[dri].reservedBatteryPercent = Math.max(0, db.drones[dri].reservedBatteryPercent - remaining);
+      }
+    }
   }
 
   writeDB(db);
@@ -638,7 +673,13 @@ app.post('/deliveries/:id/cancel', (req, res) => {
     // reembolsar bateria do drone se aplicável
     const dri = db.drones.findIndex(d => d.id === flight.droneId);
     if (dri !== -1 && typeof flight.requiredBattery !== 'undefined'){
-      db.drones[dri].batteryPercent = Math.min(100, (db.drones[dri].batteryPercent || 0) + flight.requiredBattery);
+      const consumed = flight.batteryConsumed || 0;
+      const remaining = flight.requiredBattery - consumed;
+      if (remaining > 0){
+        if (typeof db.drones[dri].reservedBatteryPercent === 'number'){
+          db.drones[dri].reservedBatteryPercent = Math.max(0, db.drones[dri].reservedBatteryPercent - remaining);
+        }
+      }
     }
   }
 
@@ -689,4 +730,117 @@ try{
   console.error('Migration error', e && e.message);
 }
 
+// Inicializa campo de reserva se ausente antes de iniciar
+try {
+  const dbInit = readDB();
+  for (const dr of dbInit.drones || []){
+    if (typeof dr.reservedBatteryPercent !== 'number') dr.reservedBatteryPercent = 0;
+  }
+  writeDB(dbInit);
+} catch(e){
+  console.error('Init reservedBatteryPercent error', e && e.message);
+}
+
+// Migração adicional: garantir que todos drones tenham state e reservedBatteryPercent
+try {
+  const dbMig = readDB();
+  let migChanged = false;
+  for (const dr of dbMig.drones || []) {
+    if (!dr.state) { dr.state = 'idle'; migChanged = true; }
+    if (typeof dr.reservedBatteryPercent !== 'number') { dr.reservedBatteryPercent = 0; migChanged = true; }
+  }
+  if (migChanged) {
+    writeDB(dbMig);
+    console.log('Migration: normalized drones state and reservedBatteryPercent');
+  }
+} catch(e){
+  console.error('Drone state migration error', e && e.message);
+}
+
 app.listen(PORT, () => console.log(`Drone backend running on http://localhost:${PORT}`));
+
+// Loop de simulação: inicia voos e avança progresso/bateria/posição
+setInterval(() => {
+  let db;
+  try { db = readDB(); } catch { return; }
+  let changed = false;
+  const now = Date.now();
+  for (const flight of db.flights || []){
+    const drone = db.drones.find(d => d.id === flight.droneId);
+    const delivery = db.deliveries.find(d => d.id === flight.deliveryId);
+    if (!drone || !delivery) continue;
+    if (flight.status === 'scheduled'){
+      flight.status = 'in_progress';
+      flight.startedAt = new Date().toISOString();
+      drone.state = 'in_flight';
+      changed = true;
+    }
+    if (flight.status === 'in_progress'){
+      const startedMs = new Date(flight.startedAt).getTime();
+      const totalSec = flight.estimatedDurationSec || Math.max(5, Math.round((flight.distanceKm / CRUISE_SPEED_KMH) * 3600));
+      const elapsedSec = Math.max(0, (now - startedMs)/1000);
+      const progress = Math.min(1, elapsedSec / totalSec);
+      flight.progress = progress;
+      const { pickup, dropoff } = delivery;
+      if (pickup && dropoff){
+        drone.currentLat = pickup.lat + (dropoff.lat - pickup.lat) * progress;
+        drone.currentLon = pickup.lon + (dropoff.lon - pickup.lon) * progress;
+      }
+      if (typeof flight.batteryConsumed !== 'number') flight.batteryConsumed = 0;
+      if (typeof drone.reservedBatteryPercent !== 'number') drone.reservedBatteryPercent = 0;
+      const targetConsumed = Math.round(flight.requiredBattery * progress);
+      const delta = targetConsumed - flight.batteryConsumed;
+      if (delta > 0){
+        drone.batteryPercent = Math.max(0, drone.batteryPercent - delta);
+        drone.reservedBatteryPercent = Math.max(0, drone.reservedBatteryPercent - delta);
+        flight.batteryConsumed = targetConsumed;
+      }
+      if (progress >= 1){
+        flight.status = 'completed';
+        flight.completedAt = new Date().toISOString();
+        drone.state = 'idle';
+        drone.currentLat = dropoff.lat;
+        drone.currentLon = dropoff.lon;
+        if (delivery.status !== 'delivered') delivery.status = 'delivered';
+        const remaining = flight.requiredBattery - flight.batteryConsumed;
+        if (remaining > 0){
+          drone.reservedBatteryPercent = Math.max(0, drone.reservedBatteryPercent - remaining);
+          drone.batteryPercent = Math.max(0, drone.batteryPercent - remaining);
+          flight.batteryConsumed = flight.requiredBattery;
+        }
+      }
+      changed = true;
+    }
+  }
+  if (changed){
+    try { writeDB(db); } catch {}
+  }
+}, 5000);
+
+// Loop de recarga automática: drones idle recarregam bateria gradualmente
+setInterval(() => {
+  let db;
+  try { db = readDB(); } catch { return; }
+  let changed = false;
+  const RECHARGE_RATE_PER_CYCLE = 5; // 5% a cada 5 segundos = taxa de ~60%/min
+  
+  for (const drone of db.drones || []) {
+    // Considera drones sem state explícito como 'idle'
+    const droneState = drone.state || 'idle';
+    if (droneState === 'idle' && typeof drone.batteryPercent === 'number' && drone.batteryPercent < 100) {
+      const previousBattery = drone.batteryPercent;
+      drone.batteryPercent = Math.min(100, drone.batteryPercent + RECHARGE_RATE_PER_CYCLE);
+      
+      // Garantir que reservedBatteryPercent não exceda batteryPercent
+      if (drone.reservedBatteryPercent > drone.batteryPercent) {
+        drone.reservedBatteryPercent = drone.batteryPercent;
+      }
+      
+      changed = true;
+    }
+  }
+  
+  if (changed) {
+    try { writeDB(db); } catch {}
+  }
+}, 5000);

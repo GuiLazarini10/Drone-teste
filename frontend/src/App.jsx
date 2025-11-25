@@ -1,7 +1,7 @@
 // Frontend principal (React) para gerenciar UI de Drones, Entregas e Voos.
 // Contém formulários, listagens, modais de mapa e ações rápidas.
-import React, { useEffect, useState } from 'react'
-import { fetchDrones, createDrone, fetchDeliveries, createDelivery, updateDelivery, deleteDelivery, cancelDelivery, scheduleFlight, fetchFlights, updateDrone, deleteDrone, fetchFlightHistory, reverseGeocode, forwardGeocode, updateFlight, deleteFlight } from './api'
+import React, { useEffect, useState, useRef } from 'react'
+import { fetchDrones, fetchDronesStatus, createDrone, fetchDeliveries, createDelivery, updateDelivery, deleteDelivery, cancelDelivery, scheduleFlight, fetchFlights, updateDrone, deleteDrone, fetchFlightHistory, reverseGeocode, forwardGeocode, updateFlight, deleteFlight, clearFlightHistory, purgeCancelledDeliveries } from './api'
 import Toasts from './Toast'
 
 // Mapas interativos (react-leaflet)
@@ -310,12 +310,16 @@ export default function App(){
   const [flights,setFlights] = useState([])
   const [toasts, setToasts] = useState([])
   const [activePage, setActivePage] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState('add-drone')
   const [flightHistory, setFlightHistory] = useState([])
   const [mapState, setMapState] = useState({ open: false, url: '', title: '' })
   const [leafletMap, setLeafletMap] = useState(null)
   const [mapAddress, setMapAddress] = useState(null)
-  const [locateOpen, setLocateOpen] = useState(false)
+  const [locateOpen, setLocateOpen] = useState(false) // legado (modal removido)
   const [locateDroneId, setLocateDroneId] = useState('')
+  const [locateSimPos, setLocateSimPos] = useState(null) // posição simulada
+  const locateIntervalRef = useRef(null)
+  const locateProgressRef = useRef(0)
   const [editingFlight, setEditingFlight] = useState(null)
   const [editingStatus, setEditingStatus] = useState('')
   const [editingScheduledAt, setEditingScheduledAt] = useState('')
@@ -368,10 +372,17 @@ export default function App(){
   // Carrega dados principais: drones, entregas e voos ativos.
   // Observação: histórico é carregado separadamente apenas quando necessário.
   const load = async ()=>{
-    setDrones(await fetchDrones())
-    setDeliveries(await fetchDeliveries())
-    setFlights(await fetchFlights())
-    // o histórico de voos não é carregado automaticamente (evita leituras desnecessárias)
+    const baseDrones = await fetchDrones();
+    let statusDrones = [];
+    try { statusDrones = await fetchDronesStatus(); } catch {}
+    const merged = baseDrones.map(b => {
+      const st = statusDrones.find(s => s.id === b.id) || {};
+      return { ...b, ...st };
+    });
+    setDrones(merged);
+    setDeliveries(await fetchDeliveries());
+    setFlights(await fetchFlights());
+    // histórico carregado sob demanda
   }
 
   const loadHistory = async ()=>{
@@ -523,6 +534,22 @@ export default function App(){
   }
 
   useEffect(()=>{ load() }, [])
+
+  // Polling periódico para atualizar status (sincronizado com backend a cada 5s)
+  useEffect(()=>{
+    const int = setInterval(async ()=>{
+      try {
+        let statusDrones = [];
+        try { statusDrones = await fetchDronesStatus(); } catch {}
+        setDrones(prev => prev.map(d => {
+          const st = statusDrones.find(s => s.id === d.id);
+          return st ? { ...d, ...st } : d;
+        }));
+        setFlights(await fetchFlights());
+      } catch {}
+    }, 5000);
+    return () => clearInterval(int);
+  }, []);
 
   // helpers para conversão entre ISO e input datetime-local
   function isoToInputDatetime(iso){
@@ -717,6 +744,23 @@ export default function App(){
     return R * C;
   }
 
+  // Cor dinâmica da bateria
+  function batteryColor(p){
+    if(p >= 60) return '#16a34a'; // verde
+    if(p >= 30) return '#f59e0b'; // laranja
+    return '#dc2626'; // vermelho
+  }
+
+  // Autonomia estimada em minutos baseado em alcance máximo e velocidade média
+  function batteryAutonomyMinutes(dr){
+    if(!dr || typeof dr.maxRangeKm === 'undefined') return null
+    const speedKmH = 36 // velocidade média adotada (10 m/s)
+    const potentialKm = (Number(dr.maxRangeKm)||0) * (Number(dr.batteryPercent)||0) / 100
+    const hours = potentialKm / speedKmH
+    const minutes = Math.round(hours * 60)
+    return minutes
+  }
+
   // Verifica localmente se existe algum drone plausível para agendar esta entrega.
   // Isso melhora a UX evitando chamadas que o servidor rejeitaria por falta de drone/bateria/alcance.
   function canSchedule(delivery){
@@ -724,7 +768,6 @@ export default function App(){
       if (!delivery) return false
       if (delivery.status && delivery.status !== 'pending') return false
       if (!delivery.pickup || !delivery.dropoff) return false
-      // precisa de pelo menos um drone que suporte o peso
       const candidates = (drones || []).filter(dr => Number(dr.maxWeightKg || 0) >= Number(delivery.weightKg || 0))
       if (!candidates || candidates.length === 0) return false
       const distanceKm = haversineKm(delivery.pickup, delivery.dropoff)
@@ -732,7 +775,8 @@ export default function App(){
         const withinRange = distanceKm <= (Number(dr.maxRangeKm) || 0)
         if (!withinRange) continue
         const requiredBattery = Math.min(100, Math.ceil((distanceKm / (Number(dr.maxRangeKm) || 1)) * 100 * 1.2))
-        const hasBattery = (Number(dr.batteryPercent || 0) >= requiredBattery)
+        const available = Number(dr.batteryPercent || 0) - Number(dr.reservedBatteryPercent || 0)
+        const hasBattery = (available >= requiredBattery)
         if (hasBattery) return true
       }
       return false
@@ -741,96 +785,214 @@ export default function App(){
     }
   }
 
+  // Calcula ETA (Estimated Time of Arrival) para um voo
+  function calculateETA(flight) {
+    if (!flight || !flight.distanceKm) return null
+    const avgSpeedKmH = 36 // velocidade média realista: 36 km/h (10 m/s)
+    const hoursEstimated = flight.distanceKm / avgSpeedKmH
+    const minutesEstimated = Math.ceil(hoursEstimated * 60)
+    
+    const scheduledTime = flight.scheduledAt ? new Date(flight.scheduledAt) : new Date()
+    const eta = new Date(scheduledTime.getTime() + minutesEstimated * 60000)
+    
+    return {
+      eta: eta,
+      minutesRemaining: minutesEstimated,
+      etaFormatted: eta.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    }
+  }
+
+  // Retorna contadores de entregas por status
+  function getDeliveryStats() {
+    const stats = {
+      pending: 0,
+      scheduled: 0,
+      in_transit: 0,
+      delivered: 0,
+      cancelled: 0
+    }
+    deliveries.forEach(d => {
+      if (d.status === 'pending') stats.pending++
+      else if (d.status === 'scheduled') stats.scheduled++
+      else if (d.status === 'in_transit') stats.in_transit++
+      else if (d.status === 'delivered') stats.delivered++
+      else if (d.status === 'cancelled') stats.cancelled++
+    })
+    return stats
+  }
+
+  // Inicia simulação de localização do drone. Se existir voo em progresso, anima entre pickup e dropoff
+  function startLocateSimulation(droneId){
+    setLocateDroneId(droneId)
+    // limpar qualquer intervalo anterior
+    if(locateIntervalRef.current){ clearInterval(locateIntervalRef.current); locateIntervalRef.current = null }
+    locateProgressRef.current = 0
+    const activeFlight = flights.find(f => f.droneId === droneId && f.status === 'in_progress')
+    let start, end
+    if(activeFlight){
+      const delivery = deliveries.find(d => (activeFlight.deliveryIds||[]).includes(d.id))
+      if(delivery && delivery.pickup && delivery.dropoff){
+        start = delivery.pickup
+        end = delivery.dropoff
+      }
+    }
+    if(!start || !end){
+      // movimento aleatório centrado em SP (-23.55, -46.63)
+      const base = { lat: -23.55, lon: -46.63 }
+      start = { lat: base.lat + (Math.random()-0.5)*0.02, lon: base.lon + (Math.random()-0.5)*0.02 }
+      end = { lat: start.lat + (Math.random()-0.5)*0.01, lon: start.lon + (Math.random()-0.5)*0.01 }
+    }
+    // define posição inicial
+    setLocateSimPos({ lat:start.lat, lon:start.lon, start, end, active: !!activeFlight })
+    locateIntervalRef.current = setInterval(()=>{
+      locateProgressRef.current += 0.05 // avança 5%
+      if(locateProgressRef.current >= 1){ locateProgressRef.current = 1 }
+      const p = locateProgressRef.current
+      const lat = start.lat + (end.lat - start.lat) * p
+      const lon = start.lon + (end.lon - start.lon) * p
+      setLocateSimPos(prev => ({ ...prev, lat, lon }))
+      if(p >= 1){
+        clearInterval(locateIntervalRef.current); locateIntervalRef.current = null
+      }
+    }, 2000)
+  }
+
+  // Informações extras para painel de localização
+  function renderLocateExtraInfo(){
+    if(!locateSimPos) return null
+    const { start, end, active } = locateSimPos
+    if(!start || !end) return null
+    const distTotal = haversineKm(start, end)
+    const distAtual = haversineKm({lat:locateSimPos.lat, lon:locateSimPos.lon}, end)
+    const perc = ((distTotal - distAtual)/distTotal)*100
+    return (
+      <div style={{marginTop:8}}>
+        <div><strong>Progresso:</strong> {distTotal? perc.toFixed(1):0}%</div>
+        <div><strong>Distância restante:</strong> {distAtual.toFixed(2)} km</div>
+        <div><strong>Estado simulado:</strong> {active ? 'EM VOO' : 'IDLE'}</div>
+      </div>
+    )
+  }
+
   function renderContent(){
     if(activePage === 'dashboard'){
+      const deliveryStats = getDeliveryStats()
+      const activeFlights = flights.filter(f => f.status === 'in_progress')
+      const successRate = deliveries.length > 0 ? Math.round((deliveryStats.delivered / deliveries.length) * 100) : 0
+
       return (
         <>
           <div className="dashboard">
             <div className="metric card">
+              <div className="metric-icon">🚁</div>
               <div className="value">{dronesAvailable}</div>
               <div className="label">Drones cadastrados</div>
             </div>
             <div className="metric card">
+              <div className="metric-icon">📦</div>
               <div className="value">{deliveriesPending}</div>
               <div className="label">Entregas pendentes</div>
             </div>
             <div className="metric card">
+              <div className="metric-icon">🛫</div>
               <div className="value">{flightsActive}</div>
-              <div className="label">Voos agendados</div>
+              <div className="label">Voos ativos</div>
+            </div>
+            <div className="metric card">
+              <div className="metric-icon">📈</div>
+              <div className="value">{successRate}%</div>
+              <div className="label">Taxa de sucesso</div>
             </div>
           </div>
 
-          <div className="layout">
-            <div>
+          <div className="main-layout">
+            <div className="main-content">
+              <div className="tabs">
+                <button className={`tab-btn ${activeTab === 'add-drone' ? 'active' : ''}`} onClick={() => setActiveTab('add-drone')}>➕ Adicionar Drone</button>
+                <button className={`tab-btn ${activeTab === 'add-delivery' ? 'active' : ''}`} onClick={() => setActiveTab('add-delivery')}>➕ Adicionar Entrega</button>
+              </div>
+
+          <div className="tab-content">
+            {activeTab === 'add-drone' && (
               <div className="card">
                 <DroneForm onCreate={load} addToast={addToast} />
               </div>
+            )}
+
+            {activeTab === 'add-delivery' && (
               <div className="card">
                 <DeliveryForm onCreate={load} addToast={addToast} />
               </div>
-            </div>
+            )}
+          </div>
+          </div>
 
-            <div>
-              <div className="card">
-                <h2>Drones</h2>
-                {drones.map(dr => (
-                  <div key={dr.id} className="drone-card" style={{position:'relative'}}>
-                    <div>
-                      <div style={{fontWeight:700}}>{dr.model}</div>
-                      <div className="drone-meta">{dr.maxWeightKg} kg • {dr.maxRangeKm} km</div>
-                    </div>
-                    <div style={{textAlign:'right'}}>
-                      {dr.batteryPercent >= 60 ? <div className="badge-green">OK</div> : dr.batteryPercent >= 30 ? <div className="badge-orange">BAIXA</div> : <div className="badge-red">CRÍTICA</div>}
-                      <div style={{marginTop:8, position:'relative'}}>
-                        <button className="small-btn" onClick={()=>setEditingDrone(dr)}>Editar</button>
-                        <button className="small-btn" style={{marginLeft:8}} onClick={()=>handleLocateById(dr.id)}>Localizar</button>
-                        <button className="small-btn primary" style={{marginLeft:8}} onClick={()=>setActionOpen(actionOpen === dr.id ? null : dr.id)}>Ações</button>
-                        {actionOpen === dr.id && (
-                          <div style={{position:'absolute', right:0, top:36, background:'#fff', border:'1px solid #ddd', boxShadow:'0 2px 6px rgba(0,0,0,0.06)', zIndex:20, minWidth:160}}>
-                            <button className="small-btn" style={{display:'block', width:'100%', textAlign:'left', padding:8, border:'none', background:'transparent'}} onClick={()=>handleRecharge(dr.id)}>
-                              {loadingOps[`recharge:${dr.id}`] ? <span className="spinner"></span> : 'Recarregar bateria (100%)'}
-                            </button>
-                            <button className="small-btn" style={{display:'block', width:'100%', textAlign:'left', padding:8, border:'none', background:'transparent'}} onClick={()=>handleDrain(dr.id)}>
-                              {loadingOps[`drain:${dr.id}`] ? <span className="spinner"></span> : 'Diminuir bateria (-10%)'}
-                            </button>
-                            <button className="small-btn" style={{display:'block', width:'100%', textAlign:'left', padding:8, border:'none', background:'transparent', color:'#c00'}} onClick={()=>handleRemove(dr.id)}>
-                              {loadingOps[`remove:${dr.id}`] ? <span className="spinner"></span> : 'Remover drone'}
-                            </button>
-                            <div style={{padding:6, fontSize:12, color:'#666', borderTop:'1px solid #f0f0f0'}}>Ações rápidas para testes</div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+            {/* Painel Lateral de Status */}
+            <div className="status-panel">
+              {/* Card 1: Resumo de Entregas */}
+              <div className="card status-card">
+                <h3>📦 Entregas</h3>
+                <div className="status-list">
+                  <div className="status-item">
+                    <span className="status-dot pending"></span>
+                    <span>{deliveryStats.pending} pendente{deliveryStats.pending !== 1 ? 's' : ''}</span>
                   </div>
-                ))}
+                  <div className="status-item">
+                    <span className="status-dot scheduled"></span>
+                    <span>{deliveryStats.scheduled} agendada{deliveryStats.scheduled !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="status-item">
+                    <span className="status-dot in-transit"></span>
+                    <span>{deliveryStats.in_transit} em transporte</span>
+                  </div>
+                  <div className="status-item">
+                    <span className="status-dot delivered"></span>
+                    <span>{deliveryStats.delivered} entregue{deliveryStats.delivered !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
               </div>
 
-              {editingDrone && (
-                <div className="card" style={{marginTop:12}}>
-                  <DroneForm editing={editingDrone} onUpdate={handleUpdateDrone} onCancel={()=>setEditingDrone(null)} addToast={addToast} />
-                </div>
-              )}
-              <div className="card">
-                <h2>Voos</h2>
-                {flights.length === 0 && <div style={{color:'#666'}}>Nenhum voo ainda</div>}
-                {flights.map(f => (
-                  <div key={f.id} style={{marginBottom:12}}>
-                    <div style={{display:'flex', justifyContent:'space-between'}}>
-                      <div><strong>{flightLabel(f)}</strong> — <span style={{color:'#666'}}>{f.droneId}</span></div>
-                      <div style={{color:'#666'}}>{f.distanceKm} km</div>
-                    </div>
-                    <div style={{marginTop:8}} className="progress"><i style={{width: `${Math.min(100, f.requiredBattery || 0)}%`}}></i></div>
-                    <div style={{marginTop:8, textAlign:'right'}}>
-                      <button className="small-btn" onClick={()=>startEditFlight(f)}>Editar</button>
-                      <button className="small-btn" style={{marginLeft:8}} onClick={()=>handleRemoveFlight(f.id)}>
-                        {loadingOps[`deleteFlight:${f.id}`] ? <span className="spinner"></span> : 'Remover'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              {/* Card 2: Voos Ativos */}
+              <div className="card status-card">
+                <h3>🛩️ Voos Ativos</h3>
+                {activeFlights.length === 0 ? (
+                  <div style={{color:'#666', fontSize:14}}>Nenhum voo em andamento</div>
+                ) : (
+                  activeFlights.slice(0, 3).map(f => {
+                    const remainingSec = f.estimatedDurationSec && typeof f.progress === 'number' ? Math.max(0, Math.round(f.estimatedDurationSec * (1 - f.progress))) : null
+                    const etaDate = f.startedAt && f.estimatedDurationSec ? new Date(new Date(f.startedAt).getTime() + f.estimatedDurationSec * 1000) : null
+                    const etaFormatted = etaDate ? etaDate.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '—'
+                    const delivery = deliveries.find(d => d.id === f.deliveryId)
+                    return (
+                      <div key={f.id} className="active-flight">
+                        <div className="flight-header">
+                          <strong>{f.id}</strong>
+                          <span className="badge-blue">EM VOO</span>
+                        </div>
+                        <div className="flight-info">
+                          <div>🚁 Drone: {f.droneId}</div>
+                          {delivery?.dropoff?.address && (
+                            <div>📍 Destino: {delivery.dropoff.address}</div>
+                          )}
+                          <div style={{marginTop:6}}>
+                            <div style={{fontSize:12, color:'#555'}}>Progresso do voo</div>
+                            <div className="flight-progress-bar"><div style={{width: `${Math.round((f.progress||0)*100)}%`}}></div></div>
+                            <div style={{fontSize:12, marginTop:4}}>🕒 ETA: {etaFormatted}{remainingSec !== null && (<span style={{color:'#2563eb', fontWeight:600}}> • {Math.ceil(remainingSec/60)} min restantes</span>)}</div>
+                          </div>
+                        </div>
+                        <div style={{marginTop:8, textAlign:'right'}}>
+                          <button className="small-btn" onClick={()=>startEditFlight(f)}>Editar</button>
+                          <button className="small-btn" style={{marginLeft:8}} onClick={()=>handleRemoveFlight(f.id)}>
+                            {loadingOps[`deleteFlight:${f.id}`] ? <span className="spinner"></span> : 'Remover'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
                 {editingFlight && (
-                  <div className="card" style={{marginTop:12}}>
-                    <h3>Editar Voo — {editingFlight.id}</h3>
+                  <div style={{marginTop:12, padding:12, background:'#f9fafb', borderRadius:8}}>
+                    <h4 style={{margin:'0 0 8px 0'}}>Editar Voo — {editingFlight.id}</h4>
                     <div style={{display:'grid', gap:8}}>
                       <label>Status</label>
                       <select value={editingStatus} onChange={e=>setEditingStatus(e.target.value)}>
@@ -853,6 +1015,45 @@ export default function App(){
                   </div>
                 )}
               </div>
+
+              {/* Card 3: Todos os Voos */}
+              <div className="card status-card">
+                <h3>📋 Todos os Voos ({flights.length})</h3>
+                {flights.length === 0 ? (
+                  <div style={{color:'#666', fontSize:14}}>Nenhum voo agendado</div>
+                ) : (
+                  <div style={{maxHeight:300, overflowY:'auto'}}>
+                    {flights.map(f => {
+                      const started = f.startedAt ? new Date(f.startedAt) : null
+                      const completed = f.completedAt ? new Date(f.completedAt) : null
+                      const sched = f.scheduledAt ? new Date(f.scheduledAt) : null
+                      const progressPct = Math.round((f.progress || 0) * 100)
+                      return (
+                        <div key={f.id} style={{marginBottom:10, padding:10, background:'#f9fafb', borderRadius:6, fontSize:12}}>
+                          <div style={{display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:4}}>
+                            <strong>{f.id}</strong>
+                            <span style={{color:'#666'}}>{f.droneId}</span>
+                          </div>
+                          <div style={{marginBottom:6, color:'#555'}}>
+                            {f.status === 'scheduled' && '⏱️ Agendado'}
+                            {f.status === 'in_progress' && '✈️ Em voo'}
+                            {f.status === 'completed' && '✅ Concluído'}
+                            {f.status === 'cancelled' && '❌ Cancelado'}
+                            {' • '}{f.distanceKm} km
+                          </div>
+                          <div className="flight-progress-bar small"><div style={{width: `${progressPct}%`}}></div></div>
+                          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))', gap:6, marginTop:6, fontSize:11}}>
+                            <div><span style={{color:'#666'}}>Agendado:</span><br />{sched ? sched.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—'}</div>
+                            <div><span style={{color:'#666'}}>Início:</span><br />{started ? started.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—'}</div>
+                            <div><span style={{color:'#666'}}>Fim:</span><br />{completed ? completed.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '—'}</div>
+                            <div><span style={{color:'#666'}}>Progresso:</span><br />{progressPct}%</div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </>
@@ -863,20 +1064,104 @@ export default function App(){
       return (
         <div className="card">
           <h2>Drones</h2>
-          {drones.map(dr => (
-            <div key={dr.id} className="drone-card">
-              <div>
-                <div style={{fontWeight:700}}>{dr.model}</div>
-                <div className="drone-meta">{dr.maxWeightKg} kg • {dr.maxRangeKm} km</div>
-              </div>
-              <div style={{textAlign:'right'}}>
-                {dr.batteryPercent >= 60 ? <div className="badge-green">OK</div> : dr.batteryPercent >= 30 ? <div className="badge-orange">BAIXA</div> : <div className="badge-red">CRÍTICA</div>}
-                <div style={{marginTop:8}}>
-                  <button className="small-btn" onClick={()=>handleLocateById(dr.id)}>Localizar</button>
+          {drones.length === 0 && <div style={{color:'#666'}}>Nenhum drone cadastrado</div>}
+          {drones.map(dr => {
+            const autonomy = batteryAutonomyMinutes(dr)
+            const tooltip = autonomy !== null ? `Autonomia estimada: ${autonomy} min` : 'Autonomia indisponível'
+            return (
+              <div key={dr.id} className="drone-card" style={{position:'relative'}}>
+                <div>
+                  <div style={{fontWeight:700}}>{dr.model}</div>
+                  <div className="drone-meta">{dr.maxWeightKg} kg • {dr.maxRangeKm} km</div>
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <div className="battery-wrapper" title={tooltip}>
+                    <div className={`battery-bar ${dr.batteryPercent < 15 ? 'low' : ''}`}> 
+                      <i className="battery-fill" style={{width: `${Math.min(100, Math.max(0, dr.batteryPercent))}%`}}></i>
+                      {typeof dr.reservedBatteryPercent === 'number' && dr.reservedBatteryPercent > 0 && (
+                        <i className="battery-reserved" style={{width: `${Math.min(100, Math.max(0, dr.reservedBatteryPercent))}%`}}></i>
+                      )}
+                      <span className="battery-label">{dr.batteryPercent}%</span>
+                      <div className="battery-cap"></div>
+                    </div>
+                    {autonomy !== null && (
+                      <div className="battery-autonomy">{autonomy} min</div>
+                    )}
+                    {typeof dr.reservedBatteryPercent === 'number' && dr.reservedBatteryPercent > 0 && (
+                      <div className="battery-reserved-label" title="Bateria reservada para voos em andamento">🔒 {dr.reservedBatteryPercent}%</div>
+                    )}
+                  </div>
+                  <div style={{marginTop:8, position:'relative'}}>
+                    <button className="small-btn" onClick={()=>setEditingDrone(dr)}>Editar</button>
+                    <button className="small-btn" style={{marginLeft:8}} onClick={()=>{ setActivePage('locate'); startLocateSimulation(dr.id) }}>Localizar</button>
+                    <button className="small-btn primary" style={{marginLeft:8}} onClick={()=>setActionOpen(actionOpen === dr.id ? null : dr.id)}>Ações</button>
+                    {actionOpen === dr.id && (
+                      <div style={{position:'absolute', right:0, top:36, background:'#fff', border:'1px solid #ddd', boxShadow:'0 2px 6px rgba(0,0,0,0.06)', zIndex:20, minWidth:170}}>
+                        <button className="small-btn" style={{display:'block', width:'100%', textAlign:'left', padding:8, border:'none', background:'transparent'}} onClick={()=>handleRecharge(dr.id)}>
+                          {loadingOps[`recharge:${dr.id}`] ? <span className="spinner"></span> : 'Recarregar bateria'}
+                        </button>
+                        <button className="small-btn" style={{display:'block', width:'100%', textAlign:'left', padding:8, border:'none', background:'transparent'}} onClick={()=>handleDrain(dr.id)}>
+                          {loadingOps[`drain:${dr.id}`] ? <span className="spinner"></span> : 'Diminuir bateria'}
+                        </button>
+                        <button className="small-btn" style={{display:'block', width:'100%', textAlign:'left', padding:8, border:'none', background:'transparent', color:'#c00'}} onClick={()=>handleRemove(dr.id)}>
+                          {loadingOps[`remove:${dr.id}`] ? <span className="spinner"></span> : 'Remover drone'}
+                        </button>
+                        <div style={{padding:6, fontSize:11, color:'#666', borderTop:'1px solid #f0f0f0'}}>Ações rápidas</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+            )
+          })}
+          {editingDrone && (
+            <div className="card" style={{marginTop:12}}>
+              <DroneForm editing={editingDrone} onUpdate={handleUpdateDrone} onCancel={()=>setEditingDrone(null)} addToast={addToast} />
             </div>
-          ))}
+          )}
+        </div>
+      )
+    }
+
+    if(activePage === 'locate'){
+      return (
+        <div className="card">
+          <h2>Localizar Drone (simulação)</h2>
+          <div style={{display:'flex', gap:16, flexWrap:'wrap'}}>
+            <div style={{minWidth:240, flex:'0 0 240px'}}>
+              <label style={{fontSize:13, fontWeight:600}}>Drone</label>
+              <select value={locateDroneId} onChange={e=>{ const id=e.target.value; setLocateDroneId(id); if(id) startLocateSimulation(id); }} style={{marginTop:6, width:'100%', padding:8}}>
+                <option value=''>-- selecione --</option>
+                {drones.map(d=> <option key={d.id} value={d.id}>{d.model} ({d.id})</option>)}
+              </select>
+              <div style={{marginTop:12, fontSize:12, color:'#666'}}>
+                Posição atual reflete simulação do backend (atualiza a cada 5s).
+              </div>
+              {locateDroneId && (()=>{
+                const dr = drones.find(d=>d.id===locateDroneId)
+                if(!dr || typeof dr.currentLat !== 'number' || typeof dr.currentLon !== 'number') return <div style={{marginTop:12, fontSize:12, color:'#666'}}>Sem posição atual</div>
+                return (
+                  <div style={{marginTop:12, background:'#f1f5f9', padding:8, borderRadius:8, fontSize:12}}>
+                    <div><strong>Lat:</strong> {dr.currentLat.toFixed(5)}</div>
+                    <div><strong>Lon:</strong> {dr.currentLon.toFixed(5)}</div>
+                    <div style={{marginTop:6, color:'#2563eb'}}>Estado: {dr.state || 'idle'}</div>
+                  </div>
+                )
+              })()}
+            </div>
+            <div style={{flex:1, minWidth:300, height:360}}>
+              {locateDroneId && (()=>{
+                const dr = drones.find(d=>d.id===locateDroneId)
+                if(!dr || typeof dr.currentLat !== 'number' || typeof dr.currentLon !== 'number') return <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#666'}}>Sem posição</div>
+                return (
+                  <MapContainer center={[dr.currentLat, dr.currentLon]} zoom={15} style={{width:'100%', height:'100%'}} whenCreated={setLeafletMap}>
+                    <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <Marker position={[dr.currentLat, dr.currentLon]}> <Popup>Drone {locateDroneId}</Popup> </Marker>
+                  </MapContainer>
+                )
+              })()}
+            </div>
+          </div>
         </div>
       )
     }
@@ -905,9 +1190,9 @@ export default function App(){
           </div>
           {deliveries.map(d => (
             <div key={d.id} className="delivery-card">
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12}}>
                 <div>
-                  <div style={{fontWeight:700}}>{d.id} <span style={{color:'#666', fontSize:13}}>— {d.status}</span></div>
+                  <div style={{fontWeight:700}}>{d.id}</div>
                   <div style={{color:'#666', fontSize:13}}>peso: {d.weightKg} kg</div>
                 </div>
                 <div style={{textAlign:'right'}}>
@@ -936,6 +1221,35 @@ export default function App(){
                         )}
                 </div>
               </div>
+              
+              {/* Timeline visual de status */}
+              <div className="delivery-timeline">
+                <div className={`timeline-step ${d.status === 'pending' ? 'active' : (d.status !== 'cancelled' ? 'completed' : '')}`}>
+                  <div className="timeline-dot">{d.status === 'pending' ? '🟠' : '✓'}</div>
+                  <div className="timeline-label">Pendente</div>
+                </div>
+                <div className="timeline-connector"></div>
+                <div className={`timeline-step ${d.status === 'scheduled' ? 'active' : (d.status === 'in_transit' || d.status === 'delivered' ? 'completed' : '')}`}>
+                  <div className="timeline-dot">{d.status === 'scheduled' ? '🔵' : (d.status === 'in_transit' || d.status === 'delivered' ? '✓' : '○')}</div>
+                  <div className="timeline-label">Agendado</div>
+                </div>
+                <div className="timeline-connector"></div>
+                <div className={`timeline-step ${d.status === 'in_transit' ? 'active' : (d.status === 'delivered' ? 'completed' : '')}`}>
+                  <div className="timeline-dot">{d.status === 'in_transit' ? '→' : (d.status === 'delivered' ? '✓' : '○')}</div>
+                  <div className="timeline-label">Em voo</div>
+                </div>
+                <div className="timeline-connector"></div>
+                <div className={`timeline-step ${d.status === 'delivered' ? 'completed' : ''}`}>
+                  <div className="timeline-dot">{d.status === 'delivered' ? '✓' : '○'}</div>
+                  <div className="timeline-label">Entregue</div>
+                </div>
+              </div>
+              
+              {d.status === 'cancelled' && (
+                <div style={{marginTop:8, padding:8, background:'#fee', borderRadius:6, color:'#c00', fontSize:13, textAlign:'center'}}>
+                  ❌ Entrega cancelada
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1073,19 +1387,44 @@ export default function App(){
   return (
     <div className="app">
       <div className="container">
-        <h1>Drone Dispatch</h1>
+        <h1>🚁 Drone Dispatch</h1>
 
         <div style={{display:'flex'}}>
           <div className="sidebar">
-            <div className={`sidebar-item ${activePage === 'dashboard' ? 'active' : ''}`} onClick={()=>setActivePage('dashboard')}>Dashboard</div>
-            <div className={`sidebar-item ${activePage === 'drones' ? 'active' : ''}`} onClick={()=>setActivePage('drones')}>Drones</div>
-            <div className={`sidebar-item ${activePage === 'entregas' ? 'active' : ''}`} onClick={()=>setActivePage('entregas')}>Entregas</div>
-            <div className={`sidebar-item ${activePage === 'dispatch' ? 'active' : ''}`} onClick={()=>setActivePage('dispatch')}>Dispatch</div>
-            <div className={`sidebar-item ${activePage === 'voos' ? 'active' : ''}`} onClick={()=>setActivePage('voos')}>Voos</div>
-            <div className={`sidebar-item ${activePage === 'history' ? 'active' : ''}`} onClick={()=>{ setActivePage('history'); loadHistory(); }}>Histórico</div>
-            <div style={{padding: '8px 12px'}}>
-              {/* make Localizar look like the other sidebar items */}
-              <div className="sidebar-item" onClick={()=>{ setActivePage('history'); loadHistory(); setLocateOpen(true); }}>Localizar Drone</div>
+            <div className="sidebar-section">
+              <div className="sidebar-section-title">OPERAÇÕES</div>
+              <div className={`sidebar-item ${activePage === 'dashboard' ? 'active' : ''}`} onClick={()=>setActivePage('dashboard')}>
+                <span className="sidebar-icon">📊</span>
+                <span>Dashboard</span>
+              </div>
+              <div className={`sidebar-item ${activePage === 'drones' ? 'active' : ''}`} onClick={()=>setActivePage('drones')}>
+                <span className="sidebar-icon">🚁</span>
+                <span>Drones</span>
+              </div>
+              <div className={`sidebar-item ${activePage === 'entregas' ? 'active' : ''}`} onClick={()=>setActivePage('entregas')}>
+                <span className="sidebar-icon">📦</span>
+                <span>Entregas</span>
+              </div>
+              <div className={`sidebar-item ${activePage === 'dispatch' ? 'active' : ''}`} onClick={()=>setActivePage('dispatch')}>
+                <span className="sidebar-icon">🛫</span>
+                <span>Despacho</span>
+              </div>
+            </div>
+            
+            <div className="sidebar-section">
+              <div className="sidebar-section-title">MONITORAMENTO</div>
+              <div className={`sidebar-item ${activePage === 'voos' ? 'active' : ''}`} onClick={()=>setActivePage('voos')}>
+                <span className="sidebar-icon">✈️</span>
+                <span>Voos</span>
+              </div>
+              <div className={`sidebar-item ${activePage === 'locate' ? 'active' : ''}`} onClick={()=>{ setActivePage('locate'); if(drones[0]) startLocateSimulation(drones[0].id); }}>
+                <span className="sidebar-icon">🔎</span>
+                <span>Localizar Drone</span>
+              </div>
+              <div className={`sidebar-item ${activePage === 'history' ? 'active' : ''}`} onClick={()=>{ setActivePage('history'); loadHistory(); }}>
+                <span className="sidebar-icon">📜</span>
+                <span>Histórico</span>
+              </div>
             </div>
           </div>
 
@@ -1155,24 +1494,7 @@ export default function App(){
         </div>
       )}
 
-      {locateOpen && (
-        <div style={{position:'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}} onClick={closeLocateModal}>
-          <div style={{width:360, background:'#fff', borderRadius:6, overflow:'hidden', boxShadow:'0 6px 24px rgba(0,0,0,0.4)'}} onClick={e=>e.stopPropagation()}>
-            <div style={{padding:12, borderBottom:'1px solid #eee', fontWeight:700}}>Localizar Drone</div>
-            <div style={{padding:12}}>
-              <label style={{display:'block', marginBottom:8}}>Escolha um drone</label>
-              <select value={locateDroneId} onChange={e=>{ const id = e.target.value; setLocateDroneId(id); if (id) handleLocateById(id); }} style={{width:'100%', padding:8}}>
-                <option value="">-- selecione --</option>
-                {drones.map(d => <option key={d.id} value={d.id}>{d.model} ({d.id})</option>)}
-              </select>
-              <div style={{marginTop:12, display:'flex', justifyContent:'flex-end'}}>
-                <button className="small-btn" onClick={closeLocateModal} style={{marginRight:8}}>Cancelar</button>
-                <button className="small-btn primary" onClick={handleLocateSelected}>Localizar</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de localização removido: agora página dedicada 'locate' */}
 
       {editingDelivery && (
         <div style={{position:'fixed', left:0, top:0, right:0, bottom:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000}} onClick={cancelEditDelivery}>
