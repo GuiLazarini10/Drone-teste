@@ -5,172 +5,408 @@
       "model": "Toyota",
       "maxWeightKg": 10,
       "maxRangeKm": 15,
-      "batteryPercent": 100
+      "batteryPercent": 100,
+      "state": "loading",
+      "currentLat": -23.5,
+      "currentLon": -46.6,
+      "reservedBatteryPercent": 0
+    },
+    {
+      "id": "drone-1764026668955-hvhs",
+      "model": "AutoGen",
+      "maxWeightKg": 12,
+      "maxRangeKm": 80,
+      "batteryPercent": 100,
+      "reservedBatteryPercent": 0,
+      "state": "idle"
+    },
+    {
+      "id": "drone-1764028889049-1eky",
+      "model": "Toshiba",
+      "maxWeightKg": 15,
+      "maxRangeKm": 200,
+      "batteryPercent": 100,
+      "reservedBatteryPercent": 0,
+      "state": "idle",
+      "currentLat": -23.509,
+      "currentLon": -46.609
+    },
+    {
+      "id": "auto-bulk-19109",
+      "model": "BulkTest",
+      "maxWeightKg": 25,
+      "maxRangeKm": 250,
+      "batteryPercent": 100,
+      "state": "idle",
+      "reservedBatteryPercent": 0
     }
   ],
   "deliveries": [
     {
-      "id": "ordem de serviço 1",
+      "id": "test-del-adv-1764031764685",
+      "weightKg": 3,
+      "pickup": {
+        "lat": -22.9,
+        "lon": -43.2
+      },
+      "dropoff": {
+        "lat": -22.91,
+        "lon": -43.21
+      },
+      "priority": "normal",
+      "status": "delivered",
+      "createdAt": "2025-11-25T00:49:24.686Z"
+    },
+    {
+      "id": "test-del-adv-1764032248521",
+      "weightKg": 3,
+      "pickup": {
+        "lat": -22.9,
+        "lon": -43.2
+      },
+      "dropoff": {
+        "lat": -22.91,
+        "lon": -43.21
+      },
+      "priority": "normal",
+      "status": "delivered",
+      "createdAt": "2025-11-25T00:57:28.524Z"
+    },
+    {
+      "id": "demo-del-38791",
       "weightKg": 2,
       "pickup": {
-        "lat": 22,
-        "lon": 22
+        "lat": -23.5,
+        "lon": -46.6
       },
       "dropoff": {
-        "lat": 22,
-        "lon": 22
+        "lat": -23.52,
+        "lon": -46.62
       },
-      "status": "cancelled",
-      "priority": "normal"
+      "priority": "high",
+      "status": "delivered",
+      "createdAt": "2025-11-25T01:00:20.674Z"
     },
     {
-      "id": "Ordem de serviço 1",
-      "weightKg": 11,
+      "id": "prio-test-high",
+      "weightKg": 3,
       "pickup": {
-        "lat": 22,
-        "lon": 22
+        "lat": -23.5,
+        "lon": -46.6
       },
       "dropoff": {
-        "lat": 22,
-        "lon": 22
+        "lat": -23.505,
+        "lon": -46.605
       },
-      "status": "cancelled",
-      "priority": "normal"
+      "priority": "high",
+      "status": "delivered",
+      "createdAt": "2025-11-25T01:05:42.438Z"
     },
     {
-      "id": "22",
-      "weightKg": 22,
+      "id": "prio-test-medium",
+      "weightKg": 3,
       "pickup": {
-        "lat": 222,
-        "lon": 22
+        "lat": -23.5,
+        "lon": -46.6
       },
       "dropoff": {
-        "lat": 22,
-        "lon": 22
+        "lat": -23.508,
+        "lon": -46.608
       },
-      "status": "cancelled",
-      "priority": "normal"
+      "priority": "medium",
+      "status": "delivered",
+      "createdAt": "2025-11-25T01:05:42.580Z"
+    },
+    {
+      "id": "prio-test-normal1",
+      "weightKg": 3,
+      "pickup": {
+        "lat": -23.5,
+        "lon": -46.6
+      },
+      "dropoff": {
+        "lat": -23.507,
+        "lon": -46.607
+      },
+      "priority": "normal",
+      "status": "delivered",
+      "createdAt": "2025-11-25T01:05:42.719Z"
+    },
+    {
+      "id": "prio-test-normal2",
+      "weightKg": 3,
+      "pickup": {
+        "lat": -23.5,
+        "lon": -46.6
+      },
+      "dropoff": {
+        "lat": -23.509,
+        "lon": -46.609
+      },
+      "priority": "normal",
+      "status": "delivered",
+      "createdAt": "2025-11-25T01:05:42.857Z"
+    },
+    {
+      "id": "prio-test-low",
+      "weightKg": 3,
+      "pickup": {
+        "lat": -23.5,
+        "lon": -46.6
+      },
+      "dropoff": {
+        "lat": -23.506,
+        "lon": -46.606
+      },
+      "priority": "low",
+      "status": "delivered",
+      "createdAt": "2025-11-25T01:05:42.982Z"
     }
   ],
-  "flights": [],
+  "flights": [
+    {
+      "id": "flight-1764032430567",
+      "deliveryId": "demo-del-38791",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 3.017,
+      "requiredBattery": 2,
+      "batteryConsumed": 2,
+      "progress": 1,
+      "estimatedDurationSec": 302,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T01:00:30.567Z",
+      "startedAt": "2025-11-25T01:00:32.734Z",
+      "completedAt": "2025-11-25T01:01:07.072Z",
+      "orderNumber": 40,
+      "displayId": "Ordem de serviço 40"
+    },
+    {
+      "id": "flight-1764032779140",
+      "deliveryId": "prio-test-high",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 0.754,
+      "requiredBattery": 1,
+      "batteryConsumed": 1,
+      "progress": 1,
+      "estimatedDurationSec": 75,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T01:06:19.140Z",
+      "startedAt": "2025-11-25T01:06:23.308Z",
+      "completedAt": "2025-11-25T01:07:38.413Z",
+      "orderNumber": 41,
+      "displayId": "Ordem de serviço 41"
+    },
+    {
+      "id": "flight-1764032779354",
+      "deliveryId": "prio-test-medium",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 1.207,
+      "requiredBattery": 1,
+      "batteryConsumed": 1,
+      "progress": 1,
+      "estimatedDurationSec": 121,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T01:06:19.354Z",
+      "startedAt": "2025-11-25T01:06:23.308Z",
+      "completedAt": "2025-11-25T01:08:28.512Z",
+      "orderNumber": 42,
+      "displayId": "Ordem de serviço 42"
+    },
+    {
+      "id": "flight-1764032779556",
+      "deliveryId": "prio-test-normal1",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 1.056,
+      "requiredBattery": 1,
+      "batteryConsumed": 1,
+      "progress": 1,
+      "estimatedDurationSec": 106,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T01:06:19.556Z",
+      "startedAt": "2025-11-25T01:06:23.308Z",
+      "completedAt": "2025-11-25T01:08:13.482Z",
+      "orderNumber": 43,
+      "displayId": "Ordem de serviço 43"
+    },
+    {
+      "id": "flight-1764032779773",
+      "deliveryId": "prio-test-normal2",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 1.358,
+      "requiredBattery": 1,
+      "batteryConsumed": 1,
+      "progress": 1,
+      "estimatedDurationSec": 136,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T01:06:19.773Z",
+      "startedAt": "2025-11-25T01:06:23.308Z",
+      "completedAt": "2025-11-25T01:08:43.537Z",
+      "orderNumber": 44,
+      "displayId": "Ordem de serviço 44"
+    },
+    {
+      "id": "flight-1764032779988",
+      "deliveryId": "prio-test-low",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 0.905,
+      "requiredBattery": 1,
+      "batteryConsumed": 1,
+      "progress": 1,
+      "estimatedDurationSec": 91,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T01:06:19.988Z",
+      "startedAt": "2025-11-25T01:06:23.308Z",
+      "completedAt": "2025-11-25T01:07:58.461Z",
+      "orderNumber": 45,
+      "displayId": "Ordem de serviço 45"
+    }
+  ],
   "flightHistory": [
     {
-      "id": "flight-1764002751293",
-      "deliveryId": "del-1",
-      "droneId": "123",
-      "distanceKm": 1.187,
-      "requiredBattery": 15,
+      "id": "flight-1764031680997",
+      "deliveryId": "test-del-high-1764031680859",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 3.025,
+      "requiredBattery": 2,
+      "batteryConsumed": 0,
+      "progress": 0,
+      "estimatedDurationSec": 302,
       "status": "scheduled",
-      "scheduledAt": "2025-11-24T16:45:51.293Z",
-      "removedAt": "2025-11-24T17:24:58.879Z",
-      "removedReason": "drone-deleted:123",
-      "orderNumber": 2,
-      "displayId": "Ordem de serviço 2"
+      "scheduledAt": "2025-11-25T00:48:00.997Z",
+      "startedAt": null,
+      "completedAt": null,
+      "orderNumber": 32,
+      "displayId": "Ordem de serviço 32",
+      "removedAt": "2025-11-25T00:48:01.019Z",
+      "removedReason": "manual-delete:flight-1764031680997"
     },
     {
-      "id": "flight-1764000657271",
-      "deliveryId": "smoke-del-001",
-      "droneId": "drone-1",
-      "distanceKm": 1.187,
-      "requiredBattery": 15,
-      "status": "scheduled",
-      "scheduledAt": "2025-11-24T16:10:57.271Z",
-      "removedAt": "2025-11-24T17:32:22.044Z",
-      "removedReason": "drone-deleted:drone-1",
-      "orderNumber": 3,
-      "displayId": "Ordem de serviço 3"
+      "id": "flight-1764031681009",
+      "deliveryId": "test-del-adv-1764031681006",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 1.512,
+      "requiredBattery": 1,
+      "batteryConsumed": 1,
+      "progress": 1,
+      "estimatedDurationSec": 151,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T00:48:01.009Z",
+      "startedAt": "2025-11-25T00:48:01.010Z",
+      "completedAt": "2025-11-25T00:48:01.013Z",
+      "orderNumber": 33,
+      "displayId": "Ordem de serviço 33",
+      "removedAt": "2025-11-25T00:48:01.026Z",
+      "removedReason": "manual-delete:flight-1764031681009"
     },
     {
-      "id": "flight-1764006317470",
-      "deliveryId": "1",
-      "droneId": "drone-2",
-      "distanceKm": 0,
-      "requiredBattery": 0,
-      "status": "scheduled",
-      "scheduledAt": "2025-11-24T17:45:17.470Z",
-      "removedAt": "2025-11-24T18:39:25.550Z",
-      "removedReason": "manual-delete:flight-1764006317470",
-      "orderNumber": 4,
-      "displayId": "Ordem de serviço 4"
-    },
-    {
-      "id": "flight-1764006274065",
-      "deliveryId": "del-1",
-      "droneId": "drone-2",
-      "distanceKm": 1.187,
-      "requiredBattery": 18,
+      "id": "flight-1764031709706",
+      "deliveryId": "test-del-high-1764031709578",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 3.025,
+      "requiredBattery": 2,
+      "batteryConsumed": 0,
+      "progress": 0.01659933774834437,
+      "estimatedDurationSec": 302,
       "status": "in_progress",
-      "scheduledAt": "2025-11-24T17:22:00.000Z",
-      "removedAt": "2025-11-24T18:47:45.907Z",
-      "removedReason": "manual-delete:flight-1764006274065",
-      "orderNumber": 5,
-      "displayId": "Ordem de serviço 5"
+      "scheduledAt": "2025-11-25T00:48:29.706Z",
+      "startedAt": "2025-11-25T00:48:34.127Z",
+      "completedAt": null,
+      "orderNumber": 34,
+      "displayId": "Ordem de serviço 34",
+      "removedAt": "2025-11-25T00:48:41.770Z",
+      "removedReason": "manual-delete:flight-1764031709706"
     },
     {
-      "id": "flight-1764006276014",
-      "deliveryId": "smoke-del-001",
-      "droneId": "drone-2",
-      "distanceKm": 1.187,
-      "requiredBattery": 18,
-      "status": "scheduled",
-      "scheduledAt": "2025-11-24T17:44:36.014Z",
-      "removedAt": "2025-11-24T18:47:47.627Z",
-      "removedReason": "manual-delete:flight-1764006276014",
-      "orderNumber": 6,
-      "displayId": "Ordem de serviço 6"
+      "id": "flight-1764031709742",
+      "deliveryId": "test-del-adv-1764031709739",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 1.512,
+      "requiredBattery": 1,
+      "batteryConsumed": 1,
+      "progress": 1,
+      "estimatedDurationSec": 151,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T00:48:29.742Z",
+      "startedAt": "2025-11-25T00:48:29.743Z",
+      "completedAt": "2025-11-25T00:48:29.744Z",
+      "orderNumber": 35,
+      "displayId": "Ordem de serviço 35",
+      "removedAt": "2025-11-25T00:48:41.773Z",
+      "removedReason": "manual-delete:flight-1764031709742"
     },
     {
-      "id": "flight-1764010889062",
-      "deliveryId": "cancel-flow-del",
-      "droneId": "drone-2",
-      "distanceKm": 0.151,
-      "requiredBattery": 3,
-      "status": "scheduled",
-      "scheduledAt": "2025-11-24T19:01:29.062Z",
-      "orderNumber": 7,
-      "displayId": "Ordem de serviço 7",
-      "removedAt": "2025-11-24T19:04:41.151Z",
-      "removedReason": "delivery-cancelled:cancel-flow-del"
-    },
-    {
-      "id": "flight-1764010142442",
-      "deliveryId": "del-1",
-      "droneId": "drone-2",
-      "distanceKm": 1.187,
-      "requiredBattery": 18,
-      "status": "scheduled",
-      "scheduledAt": "2025-11-24T18:49:02.442Z",
-      "orderNumber": 1,
-      "displayId": "Ordem de serviço 1",
-      "removedAt": "2025-11-24T19:05:14.534Z",
-      "removedReason": "delivery-cancelled:del-1"
-    },
-    {
-      "id": "flight-1764011754104",
-      "deliveryId": "ordem de serviço 1",
-      "droneId": "flash",
-      "distanceKm": 0,
-      "requiredBattery": 0,
-      "status": "scheduled",
-      "scheduledAt": "2025-11-24T19:15:54.104Z",
-      "orderNumber": 8,
-      "displayId": "Ordem de serviço 8",
-      "removedAt": "2025-11-24T19:17:44.000Z",
-      "removedReason": "drone-deleted:flash"
-    },
-    {
-      "id": "flight-1764011985635",
-      "deliveryId": "ordem de serviço 1",
-      "droneId": "Maverick",
-      "distanceKm": 0,
-      "requiredBattery": 0,
+      "id": "flight-1764031764650",
+      "deliveryId": "test-del-high-1764031764520",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 3.025,
+      "requiredBattery": 2,
+      "batteryConsumed": 0,
+      "progress": 0.03315894039735099,
+      "estimatedDurationSec": 302,
       "status": "in_progress",
-      "scheduledAt": "2025-11-24T19:19:00.000Z",
-      "orderNumber": 9,
-      "displayId": "Ordem de serviço 9",
-      "removedAt": "2025-11-24T19:46:18.369Z",
-      "removedReason": "delivery-cancelled:ordem de serviço 1"
+      "scheduledAt": "2025-11-25T00:49:24.650Z",
+      "startedAt": "2025-11-25T00:49:29.616Z",
+      "completedAt": null,
+      "orderNumber": 36,
+      "displayId": "Ordem de serviço 36",
+      "removedAt": "2025-11-25T00:49:40.712Z",
+      "removedReason": "manual-delete:flight-1764031764650"
+    },
+    {
+      "id": "flight-1764031764687",
+      "deliveryId": "test-del-adv-1764031764685",
+      "droneId": "test-drone-prio-1764031764520",
+      "distanceKm": 1.512,
+      "requiredBattery": 2,
+      "batteryConsumed": 2,
+      "progress": 1,
+      "estimatedDurationSec": 151,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T00:49:24.687Z",
+      "startedAt": "2025-11-25T00:49:24.688Z",
+      "completedAt": "2025-11-25T00:49:24.689Z",
+      "orderNumber": 37,
+      "displayId": "Ordem de serviço 37",
+      "removedAt": "2025-11-25T00:49:40.715Z",
+      "removedReason": "manual-delete:flight-1764031764687"
+    },
+    {
+      "id": "flight-1764032248489",
+      "deliveryId": "test-del-high-1764032248355",
+      "droneId": "drone-1764028889049-1eky",
+      "distanceKm": 3.025,
+      "requiredBattery": 2,
+      "batteryConsumed": 0,
+      "progress": 0,
+      "estimatedDurationSec": 302,
+      "status": "in_progress",
+      "scheduledAt": "2025-11-25T00:57:28.489Z",
+      "startedAt": "2025-11-25T00:57:32.928Z",
+      "completedAt": null,
+      "orderNumber": 38,
+      "displayId": "Ordem de serviço 38",
+      "removedAt": "2025-11-25T00:57:34.548Z",
+      "removedReason": "manual-delete:flight-1764032248489"
+    },
+    {
+      "id": "flight-1764032248525",
+      "deliveryId": "test-del-adv-1764032248521",
+      "droneId": "test-drone-prio-1764032248355",
+      "distanceKm": 1.512,
+      "requiredBattery": 2,
+      "batteryConsumed": 2,
+      "progress": 1,
+      "estimatedDurationSec": 151,
+      "status": "completed",
+      "scheduledAt": "2025-11-25T00:57:28.525Z",
+      "startedAt": "2025-11-25T00:57:28.527Z",
+      "completedAt": "2025-11-25T00:57:28.529Z",
+      "orderNumber": 39,
+      "displayId": "Ordem de serviço 39",
+      "removedAt": "2025-11-25T00:57:34.551Z",
+      "removedReason": "manual-delete:flight-1764032248525"
     }
   ],
-  "nextOrderNumber": 10
+  "nextOrderNumber": 46,
+  "obstacles": []
 }

@@ -1,9 +1,11 @@
 // test.js - Testes automatizados para o backend de drones
-// Execute com: node test.js
+// Execute com: TEST_PORT=4100 node test.js (PowerShell: $env:TEST_PORT=4100; node test.js)
 
 const http = require('http');
+const { spawn } = require('child_process');
 
-const BASE_URL = 'http://localhost:4000';
+const TEST_PORT = process.env.TEST_PORT || 4100;
+const BASE_URL = `http://localhost:${TEST_PORT}`;
 let testesAprovados = 0;
 let testesFalharam = 0;
 
@@ -294,19 +296,65 @@ async function testarStatusDrones() {
   assert(res.status === 200 && Array.isArray(res.body), 'Endpoint de status de drones retorna array');
 }
 
+async function testarRecargaAutomatica() {
+  const ts = Date.now();
+  const droneId = `test-drone-recharge-${ts}`;
+  
+  // Criar drone com bateria baixa no estado idle
+  await request('POST', '/drones', {
+    id: droneId,
+    model: 'Recharge Test',
+    maxWeightKg: 10,
+    maxRangeKm: 100,
+    batteryPercent: 50
+  });
+  // Poll em ciclos de 6 segundos (um pouco > 5s) até 3 tentativas
+  let sucesso = false;
+  let ultimaLeitura = 50;
+  for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    console.log(`  ⏳ Aguardando ~6s (tentativa ${tentativa}) para verificar recarga...`);
+    await new Promise(r => setTimeout(r, 6000));
+    const dronesNow = await request('GET', '/drones');
+    const drone = dronesNow.body.find(d => d.id === droneId);
+    if (drone && drone.batteryPercent > ultimaLeitura) {
+      console.log(`    🔋 Bateria aumentou: ${ultimaLeitura}% -> ${drone.batteryPercent}%`);
+      ultimaLeitura = drone.batteryPercent;
+      if (drone.batteryPercent >= 55) sucesso = true; // mínimo: pelo menos +5%
+      if (sucesso) break;
+    } else {
+      console.log(`    ⚠️ Sem aumento perceptível (atual: ${drone ? drone.batteryPercent : 'n/d'}%)`);
+    }
+  }
+  assert(sucesso, 'Drone idle recarrega (bateria sobe em ciclos)');
+}
+
 // ===================== Execução dos testes =====================
+
+async function startServer() {
+  console.log(`🔧 Iniciando servidor em porta de teste ${TEST_PORT}...`);
+  const serverProc = spawn('node', ['index.js'], { cwd: __dirname, env: { ...process.env, PORT: TEST_PORT } });
+  serverProc.stdout.on('data', d => process.stdout.write(d.toString()));
+  serverProc.stderr.on('data', d => process.stderr.write(d.toString()));
+  // aguardar health
+  const inicio = Date.now();
+  while (Date.now() - inicio < 10000) { // até 10s
+    try {
+      const r = await request('GET', '/health');
+      if (r.status === 200 && r.body.ok) {
+        console.log('✅ Servidor de teste pronto.');
+        return serverProc;
+      }
+    } catch {}
+    await new Promise(r => setTimeout(r, 500));
+  }
+  console.error('❌ Timeout ao iniciar servidor de teste');
+  serverProc.kill('SIGTERM');
+  process.exit(1);
+}
 
 async function executarTestes() {
   console.log('🚁 Iniciando testes do backend de drones...\n');
-
-  // Verificar se o servidor está rodando
-  try {
-    await request('GET', '/health');
-  } catch (e) {
-    console.error('❌ Servidor não está rodando em http://localhost:4000');
-    console.error('   Execute: cd backend && npm start');
-    process.exit(1);
-  }
+  const serverProc = await startServer();
 
   // Limpeza inicial
   await limparDadosTeste();
@@ -321,6 +369,7 @@ async function executarTestes() {
   await testarBloqueioRota();
   await testarAvancoVoo();
   await testarStatusDrones();
+  await testarRecargaAutomatica();
 
   // Limpeza final
   await limparDadosTeste();
@@ -330,6 +379,9 @@ async function executarTestes() {
   console.log(`✓ Testes aprovados: ${testesAprovados}`);
   console.log(`✗ Testes falharam: ${testesFalharam}`);
   console.log('='.repeat(50));
+
+  // Encerrar servidor
+  serverProc.kill('SIGTERM');
 
   if (testesFalharam > 0) {
     process.exit(1);

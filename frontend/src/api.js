@@ -10,6 +10,14 @@ export async function fetchDrones(){
   return data;
 }
 
+// Status consolidado dos drones (inclui posição atual, estado e bateria reservada)
+export async function fetchDronesStatus(){
+  const r = await fetch(`${BASE}/drones/status`);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
 // Cria um novo drone (payload: { id, model, maxWeightKg, maxRangeKm, batteryPercent? })
 export async function createDrone(payload){
   const r = await fetch(`${BASE}/drones`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -114,6 +122,14 @@ export async function fetchFlightHistory(){
   return data;
 }
 
+// Limpa todo o histórico de voos arquivados
+export async function clearFlightHistory(){
+  const r = await fetch(`${BASE}/flight-history`, { method: 'DELETE' });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
+}
+
 // Reverse geocoding via backend proxy (return object { display_name, address })
 // Simple in-memory cache to avoid repeated reverse-geocoding calls during a dev session
 const _reverseCache = new Map();
@@ -147,4 +163,12 @@ export async function forwardGeocode(query){
   const data = await r.json();
   if (!r.ok) throw new Error(data.error || JSON.stringify(data));
   return data.results || [];
+}
+
+// Remove todas as entregas canceladas em lote
+export async function purgeCancelledDeliveries(){
+  const r = await fetch(`${BASE}/deliveries-bulk/purge-cancelled`, { method: 'DELETE' });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+  return data;
 }

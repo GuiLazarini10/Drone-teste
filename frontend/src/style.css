@@ -35,6 +35,77 @@ input { margin: 6px 0; padding: 8px; width: 100%; box-sizing: border-box; border
 .badge-orange { color: white; background: #ff9800; padding: 4px 8px; border-radius: 6px; font-size: 12px }
 .badge-red { color: white; background: #f44336; padding: 4px 8px; border-radius: 6px; font-size: 12px }
 
+/* Barra de bateria */
+.battery-wrapper { display:flex; justify-content:flex-end }
+.battery-bar {
+	position: relative;
+	width: 140px;
+	height: 18px;
+	background: #e5e7eb;
+	border-radius: 6px;
+	overflow: hidden;
+	box-shadow: inset 0 0 0 1px #d1d5db;
+}
+.battery-bar .battery-fill { display:block; height:100%; transition: width .8s cubic-bezier(.4,.0,.2,1); background: linear-gradient(90deg,#16a34a 0%,#f59e0b 60%,#dc2626 100%); }
+.battery-bar.low .battery-fill { animation: batteryBlink 1s linear infinite; }
+.battery-cap { position:absolute; top:2px; right:-6px; width:6px; height:14px; background:#d1d5db; border-radius:2px; box-shadow:0 0 0 1px #9ca3af; }
+.battery-label {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 11px;
+	font-weight: 600;
+	color: #111827;
+	text-shadow: 0 1px 2px rgba(255,255,255,0.6);
+}
+.battery-autonomy { margin-top:4px; font-size:10px; color:#374151; font-weight:600; }
+@keyframes batteryBlink { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+
+.battery-reserved {
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 100%;
+	background: repeating-linear-gradient(45deg, rgba(220,38,38,0.25), rgba(220,38,38,0.25) 4px, transparent 4px, transparent 8px);
+	pointer-events: none;
+	z-index: 1;
+	transition: width .8s cubic-bezier(.4,.0,.2,1);
+}
+
+.battery-reserved-label {
+	margin-top: 4px;
+	font-size: 10px;
+	color: #dc2626;
+	font-weight: 600;
+}
+
+/* Progress bars para voos */
+.flight-progress-bar {
+	height: 8px;
+	background: #e5e7eb;
+	border-radius: 4px;
+	overflow: hidden;
+	margin-top: 4px;
+}
+.flight-progress-bar > div {
+	height: 100%;
+	background: linear-gradient(90deg, #3b82f6, #2563eb);
+	transition: width 1s cubic-bezier(.4,.0,.2,1);
+	box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+}
+.flight-progress-bar.small {
+	height: 6px;
+	margin-top: 4px;
+}
+.flight-progress-bar.small > div {
+	background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
 .small-btn { padding: 6px 10px; border-radius: 8px; border: 1px solid #ddd; background: #fff; font-size: 13px }
 .small-btn.primary { background: #2563eb; color: white; border-color: #2563eb }
 
@@ -55,11 +126,186 @@ input { margin: 6px 0; padding: 8px; width: 100%; box-sizing: border-box; border
 /* Delivery card */
 .delivery-card { padding: 12px; border-radius: 10px; border: 1px solid #eef1f5; background: #fff; margin-bottom: 10px }
 
+/* Timeline visual para entregas */
+.delivery-timeline {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 12px;
+	padding: 12px 8px;
+	background: #f9fafb;
+	border-radius: 8px;
+}
+
+.timeline-step {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	flex: 0 0 auto;
+}
+
+.timeline-dot {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: #e5e7eb;
+	color: #9ca3af;
+	font-size: 14px;
+	font-weight: 700;
+	margin-bottom: 4px;
+	transition: all 0.3s;
+}
+
+.timeline-step.active .timeline-dot {
+	background: #3b82f6;
+	color: white;
+	box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+	animation: pulse 2s infinite;
+}
+
+.timeline-step.completed .timeline-dot {
+	background: #10b981;
+	color: white;
+}
+
+.timeline-label {
+	font-size: 11px;
+	color: #6b7280;
+	font-weight: 500;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.timeline-step.active .timeline-label {
+	color: #1e40af;
+	font-weight: 600;
+}
+
+.timeline-connector {
+	flex: 1;
+	height: 2px;
+	background: #e5e7eb;
+	margin: 0 4px 20px 4px;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+	}
+	50% {
+		box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.1);
+	}
+}
+
 /* Dashboard */
 .dashboard { display:flex; gap:12px; margin-bottom:20px }
 .metric { flex:1; padding:12px; border-radius:10px; background:#fff; text-align:center; box-shadow:0 1px 4px rgba(0,0,0,0.04) }
-.metric .value { font-size:20px; font-weight:700 }
-.metric .label { color:#666; font-size:13px }
+.metric .metric-icon { font-size:32px; margin-bottom:8px }
+.metric .value { font-size:24px; font-weight:700; color:#1e3a8a }
+.metric .label { color:#666; font-size:13px; margin-top:4px }
+
+/* Main Layout com painel lateral */
+.main-layout {
+	display: grid;
+	grid-template-columns: 1fr 320px;
+	gap: 20px;
+	align-items: start;
+}
+
+.main-content {
+	min-width: 0; /* prevent overflow */
+}
+
+.status-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.status-card {
+	background: #fff;
+	border-radius: 12px;
+	padding: 16px;
+	box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.status-card h3 {
+	margin: 0 0 12px 0;
+	font-size: 16px;
+	color: #0f172a;
+}
+
+/* Status list */
+.status-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.status-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 14px;
+	color: #374151;
+}
+
+.status-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.status-dot.pending { background: #fbbf24; }
+.status-dot.scheduled { background: #3b82f6; }
+.status-dot.in-transit { background: #8b5cf6; }
+.status-dot.delivered { background: #10b981; }
+
+/* Active flight card */
+.active-flight {
+	padding: 12px;
+	background: #f0f9ff;
+	border: 1px solid #bae6fd;
+	border-radius: 8px;
+	margin-bottom: 12px;
+}
+
+.flight-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.flight-info {
+	font-size: 13px;
+	color: #374151;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.badge-blue {
+	background: #2563eb;
+	color: white;
+	padding: 4px 8px;
+	border-radius: 6px;
+	font-size: 11px;
+	font-weight: 600;
+}
+
+@media (max-width: 1200px) {
+	.main-layout {
+		grid-template-columns: 1fr;
+	}
+	.status-panel {
+		grid-column: 1;
+	}
+}
 
 /* Progress bar */
 .progress { height:10px; background:#eef2ff; border-radius:6px; overflow:hidden }
@@ -72,21 +318,67 @@ input { margin: 6px 0; padding: 8px; width: 100%; box-sizing: border-box; border
 /* Sidebar */
 .app { display:flex; gap:20px }
 .sidebar {
-	width:220px;
+	width:240px;
 	background: white;
 	border-radius: 12px;
-	padding: 12px;
+	padding: 16px 8px;
 	box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 	height: fit-content;
+	position: sticky;
+	top: 20px;
 }
-.sidebar h3 { margin: 6px 0 12px 0 }
-.sidebar-item { padding: 10px 8px; border-radius: 8px; color:#0f172a; cursor:pointer; margin-bottom:6px }
-.sidebar-item:hover { background:#f1f5f9 }
-.sidebar-item.active { background:#eef2ff; color:#1e3a8a; font-weight:600; }
+
+.sidebar-section {
+	margin-bottom: 20px;
+}
+
+.sidebar-section-title {
+	font-size: 11px;
+	font-weight: 700;
+	color: #9ca3af;
+	letter-spacing: 0.5px;
+	padding: 8px 12px;
+	margin-bottom: 4px;
+}
+
+.sidebar-item {
+	padding: 10px 12px;
+	border-radius: 8px;
+	color: #374151;
+	cursor: pointer;
+	margin-bottom: 4px;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 14px;
+	transition: all 0.2s;
+}
+
+.sidebar-item:hover {
+	background: #f1f5f9;
+	transform: translateX(2px);
+}
+
+.sidebar-item.active {
+	background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+	color: white;
+	font-weight: 600;
+	box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.sidebar-icon {
+	font-size: 18px;
+	width: 24px;
+	text-align: center;
+}
 
 @media (max-width: 880px) {
 	.app { flex-direction: column }
-	.sidebar { width: 100% }
+	.sidebar {
+		width: 100%;
+		position: relative;
+		top: 0;
+	}
 }
 
 /* Botão flutuante no mapa para centralizar/ajustar bounds */
@@ -103,3 +395,34 @@ input { margin: 6px 0; padding: 8px; width: 100%; box-sizing: border-box; border
 	cursor: pointer;
 }
 .map-center-btn:hover{ background: #f8fafc }
+
+/* Tabs */
+.tabs {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 16px;
+	border-bottom: 2px solid #e5e7eb;
+	padding-bottom: 4px;
+}
+.tab-btn {
+	padding: 10px 20px;
+	border: none;
+	background: transparent;
+	font-size: 14px;
+	font-weight: 500;
+	color: #6b7280;
+	border-radius: 6px 6px 0 0;
+	transition: all 0.2s;
+}
+.tab-btn:hover {
+	background: #f3f4f6;
+	color: #374151;
+}
+.tab-btn.active {
+	background: #2563eb;
+	color: white;
+	font-weight: 600;
+}
+.tab-content {
+	margin-top: 16px;
+}
