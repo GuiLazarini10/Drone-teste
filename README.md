@@ -89,7 +89,7 @@ chmod +x scripts/start-all.sh
 .\scripts\start-all.ps1 -Install
 
 # Próximas vezes
-.\scripts\start-all.ps1
+.\scripts\start-all.ps1 
 ```
 
 **Linux/macOS:**
